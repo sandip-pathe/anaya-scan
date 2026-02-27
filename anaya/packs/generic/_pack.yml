@@ -1,0 +1,14 @@
+id: generic
+name: Generic Compliance Packs
+description: >
+  Open-source rule packs covering secrets detection, OWASP Top 10, PII handling,
+  audit logging, and TLS encryption. Language-agnostic where possible.
+vendor: anaya
+version: "1.0.0"
+last_updated: "2026-02-21"
+packs:
+  - generic/secrets-detection
+  - generic/owasp-top10
+  - generic/pii-handling
+  - generic/audit-logging
+  - generic/tls-encryption

@@ -1,0 +1,170 @@
+manifest:
+  id: "generic/audit-logging"
+  version: "1.0.0"
+  name: "Audit Logging"
+  description: "Ensures financial and sensitive operations have proper audit logging"
+  last_updated: "2026-02-21"
+  sources:
+    - "https://www.rbi.org.in/Scripts/BS_ViewMasCirculardetails.aspx?id=10091"
+    - "https://owasp.org/www-project-web-security-testing-guide/"
+  changelog:
+    - version: "1.0.0"
+      date: "2026-02-21"
+      notes: "Initial release with 7 rules including 2 AST rules for missing audit logs"
+
+rules:
+  # ── 1. Missing Audit Log in Financial Function (Python AST) ──
+  - id: "missing-audit-log-python"
+    name: "Missing Audit Log in Financial Function (Python)"
+    type: ast
+    severity: HIGH
+    enabled: true
+    message: "Financial function at {file}:{line} has no audit log call"
+    fix_hint: "Add audit_log() or logger.audit() call in financial functions (transfer, disburse, debit, credit, repay)"
+    references:
+      - "https://www.rbi.org.in/Scripts/BS_ViewMasCirculardetails.aspx?id=10091"
+    tags:
+      - audit
+      - finance
+      - rbi
+    languages:
+      - python
+    query: "(function_definition name: (identifier) @fn_name body: (block) @fn_body)"
+    name_regex: "(?i)(transfer|disburse|debit|credit|repay)"
+    must_not_contain: "(?i)(audit_log|logger\\.audit|audit\\.log)"
+
+  # ── 2. Missing Audit Log in Financial Function (JavaScript AST) ──
+  - id: "missing-audit-log-javascript"
+    name: "Missing Audit Log in Financial Function (JavaScript)"
+    type: ast
+    severity: HIGH
+    enabled: true
+    message: "Financial function at {file}:{line} has no audit log call"
+    fix_hint: "Add auditLog() or logger.audit() call in financial functions (transfer, disburse, debit, credit, repay)"
+    references:
+      - "https://www.rbi.org.in/Scripts/BS_ViewMasCirculardetails.aspx?id=10091"
+    tags:
+      - audit
+      - finance
+      - rbi
+    languages:
+      - javascript
+    query: "(function_declaration name: (identifier) @fn_name body: (statement_block) @fn_body)"
+    name_regex: "(?i)(transfer|disburse|debit|credit|repay)"
+    must_not_contain: "(?i)(auditLog|audit_log|logger\\.audit|audit\\.log)"
+
+  # ── 3. No Silent Exception Swallowing ───────────────────
+  - id: "no-silent-except"
+    name: "No Silent Exception Swallowing"
+    type: pattern
+    severity: HIGH
+    enabled: true
+    message: "Bare except with pass detected at {file}:{line} — errors may go unlogged"
+    fix_hint: "Log or re-raise all exceptions. Use 'except Exception as e: logger.error(e)' at minimum."
+    references:
+      - "https://cwe.mitre.org/data/definitions/390.html"
+    tags:
+      - audit
+      - exception
+      - cwe-390
+    languages:
+      - python
+    patterns:
+      - '(?m)^\s*except\s*:\s*$'
+      - '(?m)^\s*except(?:\s+\w+)?(?:\s+as\s+\w+)?:\s*pass\s*(?:#.*)?$'
+    exclude_patterns:
+      - 'logger'
+      - 'logging'
+      - 'raise'
+
+  # ── 4. Console.log in Production ────────────────────────
+  - id: "no-console-log-sensitive"
+    name: "No Console.log for Sensitive Data"
+    type: pattern
+    severity: MEDIUM
+    enabled: true
+    message: "console.log used for sensitive/financial data at {file}:{line}"
+    fix_hint: "Use a structured logger (e.g. winston, pino) with proper log levels and redaction"
+    references:
+      - "https://owasp.org/www-project-web-security-testing-guide/"
+    tags:
+      - audit
+      - logging
+    languages:
+      - javascript
+    patterns:
+      - '(?i)console\.log\s*\(.*(?:balance|amount|transaction|transfer|account|payment|disburs)'
+    exclude_patterns:
+      - 'test'
+      - 'mock'
+      - 'stub'
+
+  # ── 5. Missing Error Handler in Express/Async Route ─────
+  - id: "no-unhandled-async-route"
+    name: "No Unhandled Async Route Errors"
+    type: pattern
+    severity: MEDIUM
+    enabled: true
+    message: "Async route handler without try/catch or error middleware at {file}:{line}"
+    fix_hint: "Wrap async handlers in try/catch or use express-async-errors middleware"
+    references:
+      - "https://expressjs.com/en/guide/error-handling.html"
+    tags:
+      - audit
+      - express
+      - error-handling
+    languages:
+      - javascript
+    patterns:
+      - '(?i)(?:app|router)\.\s*(?:get|post|put|delete|patch)\s*\(\s*[''"].*[''"]\s*,\s*async\s*\('
+    exclude_patterns:
+      - 'try'
+      - 'asyncHandler'
+      - 'catchAsync'
+      - 'express-async-errors'
+
+  # ── 6. Print Statement in Financial Code ────────────────
+  - id: "no-print-in-financial"
+    name: "No Print Statements in Financial Functions"
+    type: pattern
+    severity: MEDIUM
+    enabled: true
+    message: "print() used near financial logic at {file}:{line} — use structured logging"
+    fix_hint: "Replace print() with logger calls for proper audit trail"
+    references:
+      - "https://cwe.mitre.org/data/definitions/778.html"
+    tags:
+      - audit
+      - logging
+      - cwe-778
+    languages:
+      - python
+    patterns:
+      - '(?i)print\s*\(.*(?:balance|amount|transaction|transfer|disburs|debit|credit|repay)'
+    exclude_patterns:
+      - 'test_'
+      - 'mock'
+
+  # ── 7. Logging Without Correlation ID ──────────────────
+  - id: "no-log-without-correlation"
+    name: "Financial Log Without Correlation ID"
+    type: pattern
+    severity: LOW
+    enabled: true
+    message: "Financial log entry without correlation/request ID at {file}:{line}"
+    fix_hint: "Include request_id or correlation_id in all financial log entries for traceability"
+    references:
+      - "https://www.rbi.org.in/Scripts/BS_ViewMasCirculardetails.aspx?id=10091"
+    tags:
+      - audit
+      - traceability
+    languages:
+      - python
+      - javascript
+    patterns:
+      - '(?i)logger\.(?:info|warning|error|critical)\s*\(\s*[''"](?:transfer|payment|disburs|debit|credit|repay)'
+    exclude_patterns:
+      - 'request_id'
+      - 'correlation_id'
+      - 'trace_id'
+      - 'txn_id'

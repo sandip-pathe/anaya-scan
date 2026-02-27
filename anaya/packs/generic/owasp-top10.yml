@@ -1,0 +1,278 @@
+manifest:
+  id: "generic/owasp-top10"
+  version: "1.0.0"
+  name: "OWASP Top 10 (2021)"
+  description: "Detects common vulnerabilities aligned with the OWASP Top 10 2021 categories"
+  last_updated: "2026-02-21"
+  sources:
+    - "https://owasp.org/Top10/"
+    - "https://cwe.mitre.org/"
+  changelog:
+    - version: "1.0.0"
+      date: "2026-02-21"
+      notes: "Initial release — one rule per OWASP 2021 category A01-A10"
+
+rules:
+  # ── A01: Broken Access Control ──────────────────────────
+  - id: "a01-open-redirect"
+    name: "A01 — Open Redirect"
+    type: pattern
+    severity: HIGH
+    enabled: true
+    message: "Unvalidated redirect using user input at {file}:{line}"
+    fix_hint: "Validate redirect URLs against an allowlist or use relative paths"
+    references:
+      - "https://owasp.org/Top10/A01_2021-Broken_Access_Control/"
+      - "https://cwe.mitre.org/data/definitions/601.html"
+    tags:
+      - owasp
+      - A01
+      - cwe-601
+    languages:
+      - python
+      - javascript
+    patterns:
+      - '(?i)redirect\s*\(\s*(?:req(?:uest)?\.(?:args|query|params|GET|POST)\.get|req\.query\.)'
+      - '(?i)res\.redirect\s*\(\s*req\.(?:query|params)\.'
+    exclude_patterns:
+      - 'url_for'
+      - 'reverse\('
+
+  # ── A02: Cryptographic Failures ─────────────────────────
+  - id: "a02-weak-hash"
+    name: "A02 — Weak Hashing Algorithm"
+    type: pattern
+    severity: HIGH
+    enabled: true
+    message: "Weak hashing algorithm (MD5/SHA1) used at {file}:{line}"
+    fix_hint: "Use SHA-256 or stronger. For passwords, use bcrypt, scrypt, or argon2"
+    references:
+      - "https://owasp.org/Top10/A02_2021-Cryptographic_Failures/"
+      - "https://cwe.mitre.org/data/definitions/328.html"
+    tags:
+      - owasp
+      - A02
+      - cwe-328
+    languages:
+      - python
+      - javascript
+    patterns:
+      - '(?i)(?:hashlib\.md5|hashlib\.sha1|createHash\s*\(\s*["\x27](?:md5|sha1)["\x27]\s*\))'
+    exclude_patterns:
+      - 'hmac'
+      - 'checksum'
+      - 'etag'
+
+  # ── A03: Injection ──────────────────────────────────────
+  - id: "a03-sql-injection"
+    name: "A03 — SQL Injection"
+    type: pattern
+    severity: CRITICAL
+    enabled: true
+    message: "Potential SQL injection via string concatenation at {file}:{line}"
+    fix_hint: "Use parameterized queries or ORM methods instead of string concatenation"
+    references:
+      - "https://owasp.org/Top10/A03_2021-Injection/"
+      - "https://cwe.mitre.org/data/definitions/89.html"
+    tags:
+      - owasp
+      - A03
+      - cwe-89
+    languages:
+      - python
+      - javascript
+    patterns:
+      - '(?i)(?:SELECT|INSERT|UPDATE|DELETE|DROP)\s+.*(?:\+\s*\w+|\%s|%\s*\(|\{.*\}|"\s*\+\s*\w+|\x27\s*\+\s*\w+)'
+      - '(?i)(?:execute|query)\s*\([^)]*(?:\+\s*\w+|f["\x27]|\.format\s*\(|%\s*\()'
+    exclude_patterns:
+      - '\?\s*,'
+      - '\$\d'
+      - 'parameterized'
+      - 'logger\.'
+      - 'logging\.'
+      - 'log\.'
+      - '\.warning\s*\('
+      - '\.error\s*\('
+      - '\.debug\s*\('
+      - '\.info\s*\('
+      - 'print\s*\('
+      - '#.*(?:SELECT|INSERT|UPDATE|DELETE)'
+      - 'comment'
+      - 'migration'
+
+  # ── A04: Insecure Design ────────────────────────────────
+  - id: "a04-no-rate-limit-annotation"
+    name: "A04 — Missing Rate Limiting on Sensitive Endpoint"
+    type: pattern
+    severity: MEDIUM
+    enabled: true
+    message: "Sensitive endpoint without rate limiting at {file}:{line}"
+    fix_hint: "Add rate limiting middleware to authentication and sensitive endpoints"
+    references:
+      - "https://owasp.org/Top10/A04_2021-Insecure_Design/"
+      - "https://cwe.mitre.org/data/definitions/770.html"
+    tags:
+      - owasp
+      - A04
+      - cwe-770
+    languages:
+      - python
+      - javascript
+    patterns:
+      - '(?i)@app\.(?:route|post|put)\s*\(\s*["\x27]/(?:login|signin|auth|register|signup|reset|password|token)["\x27]'
+    exclude_patterns:
+      - 'rate_limit'
+      - 'limiter'
+      - 'throttle'
+
+  # ── A05: Security Misconfiguration ─────────────────────
+  - id: "a05-debug-enabled"
+    name: "A05 — Debug Mode Enabled"
+    type: pattern
+    severity: HIGH
+    enabled: true
+    message: "Application debug mode is enabled at {file}:{line}"
+    fix_hint: "Disable debug mode in production. Use environment variables to control it."
+    references:
+      - "https://owasp.org/Top10/A05_2021-Security_Misconfiguration/"
+      - "https://cwe.mitre.org/data/definitions/489.html"
+    tags:
+      - owasp
+      - A05
+      - cwe-489
+    languages:
+      - python
+      - javascript
+    patterns:
+      - '(?i)DEBUG\s*=\s*True'
+      - '(?i)app\.(?:debug|config\[.DEBUG.\])\s*=\s*True'
+    exclude_patterns:
+      - 'os\.getenv'
+      - 'os\.environ'
+      - 'process\.env'
+      - 'settings\.'
+      - 'if\s+'
+
+  # ── A06: Vulnerable Components ──────────────────────────
+  - id: "a06-known-vulnerable-cdn"
+    name: "A06 — Known Vulnerable CDN Library"
+    type: pattern
+    severity: MEDIUM
+    enabled: true
+    message: "Reference to potentially outdated/vulnerable CDN library at {file}:{line}"
+    fix_hint: "Use a current version of the library and consider using subresource integrity (SRI)"
+    references:
+      - "https://owasp.org/Top10/A06_2021-Vulnerable_and_Outdated_Components/"
+    tags:
+      - owasp
+      - A06
+    languages:
+      - python
+      - javascript
+    patterns:
+      - '(?i)(?:jquery|angular|react|vue|bootstrap)[\-/](?:1\.[0-9]|2\.[0-3])\.[0-9]+(?:\.min)?\.(?:js|css)'
+    exclude_patterns: []
+
+  # ── A07: Auth Failures ──────────────────────────────────
+  - id: "a07-hardcoded-credentials"
+    name: "A07 — Hardcoded Credentials in Auth Logic"
+    type: pattern
+    severity: CRITICAL
+    enabled: true
+    message: "Hardcoded credentials in authentication logic at {file}:{line}"
+    fix_hint: "Never compare credentials against hardcoded strings. Use a database or identity provider."
+    references:
+      - "https://owasp.org/Top10/A07_2021-Identification_and_Authentication_Failures/"
+      - "https://cwe.mitre.org/data/definitions/798.html"
+    tags:
+      - owasp
+      - A07
+      - cwe-798
+    languages:
+      - python
+      - javascript
+    patterns:
+      - '(?i)(?:password|passwd)\s*(?:==|===|!=|!==)\s*["\x27][^"\x27]{3,}["\x27]'
+      - '(?i)(?:username|user)\s*(?:==|===)\s*["\x27]admin["\x27]'
+    exclude_patterns:
+      - 'test_'
+      - 'spec_'
+      - 'mock'
+
+  # ── A08: Software and Data Integrity ────────────────────
+  - id: "a08-unsafe-deserialization"
+    name: "A08 — Unsafe Deserialization"
+    type: pattern
+    severity: CRITICAL
+    enabled: true
+    message: "Unsafe deserialization detected at {file}:{line}"
+    fix_hint: "Use safe deserialization (JSON) instead of pickle/marshal/deserialize. If unavoidable, validate input."
+    references:
+      - "https://owasp.org/Top10/A08_2021-Software_and_Data_Integrity_Failures/"
+      - "https://cwe.mitre.org/data/definitions/502.html"
+    tags:
+      - owasp
+      - A08
+      - cwe-502
+    languages:
+      - python
+      - javascript
+    patterns:
+      - '(?i)pickle\.loads?\s*\('
+      - '(?i)marshal\.loads?\s*\('
+      - '(?i)yaml\.(?:load|unsafe_load)\s*\('
+      - '(?i)(?:unserialize|deserialize)\s*\('
+    exclude_patterns:
+      - 'yaml\.safe_load'
+      - 'SafeLoader'
+
+  # ── A09: Security Logging Failures ──────────────────────
+  - id: "a09-sensitive-data-in-log"
+    name: "A09 — Sensitive Data in Logs"
+    type: pattern
+    severity: HIGH
+    enabled: true
+    message: "Sensitive data (password/token/secret) logged at {file}:{line}"
+    fix_hint: "Never log passwords, tokens, or secrets. Log only sanitized references."
+    references:
+      - "https://owasp.org/Top10/A09_2021-Security_Logging_and_Monitoring_Failures/"
+      - "https://cwe.mitre.org/data/definitions/532.html"
+    tags:
+      - owasp
+      - A09
+      - cwe-532
+    languages:
+      - python
+      - javascript
+    patterns:
+      - '(?i)(?:log(?:ger)?\.(?:info|debug|warning|error|critical)|console\.log|print)\s*\(.*(?:password|passwd|secret|token|api_key|apikey)\s*[=:]'
+    exclude_patterns:
+      - 'redacted'
+      - 'masked'
+      - '\*\*\*'
+
+  # ── A10: SSRF ──────────────────────────────────────────
+  - id: "a10-ssrf-risk"
+    name: "A10 — Server-Side Request Forgery Risk"
+    type: pattern
+    severity: HIGH
+    enabled: true
+    message: "User-controlled URL used in server-side request at {file}:{line}"
+    fix_hint: "Validate URLs against an allowlist of trusted hosts before making requests"
+    references:
+      - "https://owasp.org/Top10/A10_2021-Server-Side_Request_Forgery_%28SSRF%29/"
+      - "https://cwe.mitre.org/data/definitions/918.html"
+    tags:
+      - owasp
+      - A10
+      - cwe-918
+    languages:
+      - python
+      - javascript
+    patterns:
+      - '(?i)(?:urlopen|requests\.get|requests\.post|httpx\.get|httpx\.post|axios\.get|axios\.post|fetch)\s*\(\s*(?:url|req\.|request\.)'
+    exclude_patterns:
+      - 'ALLOWED_HOSTS'
+      - 'allowlist'
+      - 'whitelist'
+      - 'validate_url'

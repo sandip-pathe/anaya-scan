@@ -1,0 +1,208 @@
+manifest:
+  id: "generic/pii-handling"
+  version: "1.0.0"
+  name: "PII Handling"
+  description: "Detects personally identifiable information (PII) exposed in logs, exceptions, and output"
+  last_updated: "2026-02-21"
+  sources:
+    - "https://www.meity.gov.in/data-protection-framework"
+    - "https://gdpr-info.eu/"
+  changelog:
+    - version: "1.0.0"
+      date: "2026-02-21"
+      notes: "Initial release with 8 rules covering Indian and global PII patterns"
+
+rules:
+  # ── 1. PAN Number ────────────────────────────────────────
+  - id: "no-pan-number-exposure"
+    name: "No PAN Number Exposure"
+    type: pattern
+    severity: HIGH
+    enabled: true
+    message: "Indian PAN number pattern detected in output/log at {file}:{line}"
+    fix_hint: "Mask PAN numbers before logging. Show only last 4 characters."
+    references:
+      - "https://www.incometax.gov.in/iec/foportal/"
+    tags:
+      - pii
+      - india
+      - pan
+    languages:
+      - python
+      - javascript
+    patterns:
+      - '(?i)(?:print|log(?:ger)?\.(?:info|debug|warning|error|critical)|console\.log)\s*\(.*\b[A-Z]{5}[0-9]{4}[A-Z]\b'
+    exclude_patterns:
+      - 'mask'
+      - 'redact'
+      - 'XXXXX'
+
+  # ── 2. Aadhaar Number ───────────────────────────────────
+  - id: "no-aadhaar-exposure"
+    name: "No Aadhaar Number Exposure"
+    type: pattern
+    severity: HIGH
+    enabled: true
+    message: "Aadhaar number pattern detected in output/log at {file}:{line}"
+    fix_hint: "Mask Aadhaar numbers. Show only last 4 digits per UIDAI guidelines."
+    references:
+      - "https://uidai.gov.in/"
+    tags:
+      - pii
+      - india
+      - aadhaar
+    languages:
+      - python
+      - javascript
+    patterns:
+      - '(?i)(?:print|log(?:ger)?\.(?:info|debug|warning|error|critical)|console\.log)\s*\(.*\b\d{4}\s?\d{4}\s?\d{4}\b'
+    exclude_patterns:
+      - 'mask'
+      - 'redact'
+      - 'XXXX'
+
+  # ── 3. Email in Logs ────────────────────────────────────
+  - id: "no-email-in-logs"
+    name: "No Email Addresses in Logs"
+    type: pattern
+    severity: MEDIUM
+    enabled: true
+    message: "Email address found in log/print statement at {file}:{line}"
+    fix_hint: "Hash or mask email addresses before logging"
+    references:
+      - "https://gdpr-info.eu/art-5-gdpr/"
+    tags:
+      - pii
+      - email
+    languages:
+      - python
+      - javascript
+    patterns:
+      - '(?i)(?:print|log(?:ger)?\.(?:info|debug|warning|error|critical)|console\.log)\s*\(.*[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z]{2,}'
+    exclude_patterns:
+      - 'mask'
+      - 'redact'
+      - 'example\.com'
+      - 'test@'
+
+  # ── 4. Phone Number ─────────────────────────────────────
+  - id: "no-phone-number-exposure"
+    name: "No Phone Numbers in Logs"
+    type: pattern
+    severity: MEDIUM
+    enabled: true
+    message: "Phone number pattern found in log/print statement at {file}:{line}"
+    fix_hint: "Mask phone numbers before logging. Show only last 4 digits."
+    references:
+      - "https://gdpr-info.eu/art-5-gdpr/"
+    tags:
+      - pii
+      - phone
+    languages:
+      - python
+      - javascript
+    patterns:
+      - '(?i)(?:print|log(?:ger)?\.(?:info|debug|warning|error|critical)|console\.log)\s*\(.*(?:\+91[\s-]?\d{10}|\b\d{10}\b)'
+    exclude_patterns:
+      - 'mask'
+      - 'redact'
+      - 'XXXXXX'
+
+  # ── 5. Password in Logs ────────────────────────────────
+  - id: "no-password-in-logs"
+    name: "No Passwords in Logs"
+    type: pattern
+    severity: CRITICAL
+    enabled: true
+    message: "Password value logged at {file}:{line}"
+    fix_hint: "Never log password values. Log only that an authentication event occurred."
+    references:
+      - "https://cwe.mitre.org/data/definitions/532.html"
+    tags:
+      - pii
+      - password
+      - cwe-532
+    languages:
+      - python
+      - javascript
+    patterns:
+      - '(?i)(?:print|log(?:ger)?\.(?:info|debug|warning|error|critical)|console\.log)\s*\(.*(?:password|passwd|pwd)\s*[=:]'
+    exclude_patterns:
+      - 'redacted'
+      - 'masked'
+      - '\*\*\*'
+
+  # ── 6. Credit Card Number ──────────────────────────────
+  - id: "no-credit-card-exposure"
+    name: "No Credit Card Numbers in Code"
+    type: pattern
+    severity: CRITICAL
+    enabled: true
+    message: "Credit card number pattern detected at {file}:{line}"
+    fix_hint: "Never store or log full credit card numbers. Use tokenized references."
+    references:
+      - "https://www.pcisecuritystandards.org/"
+    tags:
+      - pii
+      - pci
+      - credit-card
+    languages:
+      - python
+      - javascript
+    patterns:
+      - '(?<!\+)\b(?:4\d{3}|5[1-5]\d{2}|6011|3[47]\d{2})[\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{4}\b'
+    exclude_patterns:
+      - 'mask'
+      - 'redact'
+      - 'XXXX'
+      - 'test_card'
+      - 'example'
+      - 'phone'
+      - 'tel'
+      - '\+\d{1,3}'
+
+  # ── 7. Date of Birth ───────────────────────────────────
+  - id: "no-dob-exposure"
+    name: "No Date of Birth in Exceptions"
+    type: pattern
+    severity: MEDIUM
+    enabled: true
+    message: "Date of birth exposed in exception/error message at {file}:{line}"
+    fix_hint: "Do not include dates of birth in exception messages"
+    references:
+      - "https://gdpr-info.eu/art-5-gdpr/"
+    tags:
+      - pii
+      - dob
+    languages:
+      - python
+      - javascript
+    patterns:
+      - '(?i)(?:raise\s+\w*(?:Error|Exception)|throw\s+new\s+Error)\s*\(.*\b(?:dob|date.of.birth|DOB)\b'
+      - '(?i)(?:raise\s+\w*(?:Error|Exception)|throw\s+new\s+Error)\s*\(.*\b\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4}\b'
+    exclude_patterns:
+      - 'format'
+      - 'example'
+
+  # ── 8. Customer ID in Exception ─────────────────────────
+  - id: "no-customer-id-in-exception"
+    name: "No Customer PII in Exception Messages"
+    type: pattern
+    severity: MEDIUM
+    enabled: true
+    message: "Customer PII or identifiers leaked in exception at {file}:{line}"
+    fix_hint: "Use opaque reference IDs in exceptions. Log full details separately with proper access controls."
+    references:
+      - "https://cwe.mitre.org/data/definitions/209.html"
+    tags:
+      - pii
+      - exception
+      - cwe-209
+    languages:
+      - python
+      - javascript
+    patterns:
+      - '(?i)(?:raise\s+\w*(?:Error|Exception)|throw\s+new\s+Error)\s*\(.*(?:aadhaar|pan_number|ssn|credit_card|phone_number)'
+    exclude_patterns:
+      - 'invalid.*format'
+      - 'validation'

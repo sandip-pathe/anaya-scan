@@ -1,0 +1,52 @@
+manifest:
+  id: "test/sample-pack"
+  version: "1.0.0"
+  name: "Test Sample Pack"
+  description: "Minimal pack for unit testing the rule loader"
+  last_updated: "2026-02-21"
+  sources:
+    - "https://example.com/test"
+  changelog:
+    - version: "1.0.0"
+      date: "2026-02-21"
+      notes: "Initial release for testing"
+
+rules:
+  - id: "no-hardcoded-password"
+    name: "No Hardcoded Passwords"
+    type: pattern
+    severity: HIGH
+    enabled: true
+    message: "Hardcoded password detected at {file}:{line}"
+    fix_hint: "Use environment variables or a secrets manager"
+    references:
+      - "https://cwe.mitre.org/data/definitions/798.html"
+    tags:
+      - secrets
+      - cwe-798
+    languages:
+      - python
+      - javascript
+    patterns:
+      - "(?i)password\\s*=\\s*[\"'][^\"']{3,}[\"']"
+    exclude_patterns:
+      - "os\\.getenv"
+      - "process\\.env"
+      - "environ\\["
+
+  - id: "no-todo-fixme"
+    name: "No TODO/FIXME in Production"
+    type: pattern
+    severity: LOW
+    enabled: true
+    message: "TODO/FIXME comment found at {file}:{line}"
+    fix_hint: "Resolve the TODO before merging"
+    references: []
+    tags:
+      - code-quality
+    languages:
+      - "*"
+    patterns:
+      - "(?i)#\\s*(?:TODO|FIXME)\\b"
+      - "(?i)//\\s*(?:TODO|FIXME)\\b"
+    exclude_patterns: []

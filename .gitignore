@@ -1,0 +1,82 @@
+# ─── Python ──────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+*.egg
+.mypy_cache/
+.ruff_cache/
+.pdm-build/
+
+# ─── Virtual environments ────────────────────────────────────
+.venv/
+venv/
+env/
+.uv/
+
+# ─── Environment & secrets ───────────────────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+private-key.pem
+
+# ─── IDE ─────────────────────────────────────────────────────
+.vscode/
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*~
+
+# ─── OS ──────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+Desktop.ini
+nul
+
+# ─── Docker ──────────────────────────────────────────────────
+docker-compose.override.yml
+
+# ─── Testing / Coverage ─────────────────────────────────────
+.coverage
+htmlcov/
+.pytest_cache/
+
+# ─── Build artifacts ────────────────────────────────────────
+*.sarif
+out.sarif
+
+# ─── Node (if fixtures include JS projects) ─────────────────
+node_modules/
+
+# ─── Scan results / debug output (never commit) ─────────────
+*.result.txt
+*_result.txt
+*_results.txt
+*_results*.txt
+*_report.txt
+*_report.json
+*_err.txt
+care_*.txt
+care_*.json
+ohc_*.txt
+ohc_*.json
+pr_output*.txt
+api_all_result.txt
+test_results.txt
+test_api_result.txt
+test_rest_result.txt
+self_scan*.json
+self_baseline.json
+dpdp_report.json
+care_compliance_map.json
+care_pii_map.json
+
+# ─── Workspace ──────────────────────────────────────────────
+_workspace/
+.workspace/

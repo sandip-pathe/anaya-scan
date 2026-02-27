@@ -1,0 +1,308 @@
+manifest:
+  id: "generic/cert-in-directions"
+  version: "1.0.0"
+  name: "CERT-In Cyber Security Directions"
+  description: >
+    Indian Computer Emergency Response Team (CERT-In) directions on
+    information security practices. Covers mandatory incident reporting,
+    log retention (180 days), time synchronisation, and access controls.
+    Applicable to all IT service providers, data centres, and body corporates.
+  last_updated: "2026-02-24"
+  sources:
+    - "https://www.cert-in.org.in/PDF/CERT-In_Directions_70B_28.04.2022.pdf"
+    - "https://www.meity.gov.in/content/cert-in"
+  changelog:
+    - version: "1.0.0"
+      date: "2026-02-24"
+      notes: "Initial release: 10 rules covering CERT-In directions"
+
+rules:
+  # ═══════════════════════════════════════════════════════════
+  #  PATTERN RULES
+  # ═══════════════════════════════════════════════════════════
+
+  # ── Synchronised time (Direction 3) ───────────────────────
+  - id: "no-ntp-sync"
+    name: "No NTP Time Synchronisation"
+    type: pattern
+    severity: MEDIUM
+    enabled: true
+    message: "Custom datetime/timezone usage detected at {file}:{line} without NTP synchronisation. CERT-In requires all systems to synchronise to NTP servers."
+    fix_hint: "Use NTP-synchronised system time. Point all servers to Indian NTP servers (time.nplindia.in) or NTP pool."
+    references:
+      - "CERT-In Direction 3: Time synchronisation"
+    tags:
+      - cert-in
+      - time
+      - ntp
+    languages:
+      - python
+      - javascript
+    patterns:
+      - '(?i)datetime\.now\(\)\.replace\(tzinfo'
+      - '(?i)timedelta\(.*hours.*\).*\.replace'
+    exclude_patterns:
+      - 'utc'
+      - 'ntp'
+      - 'timezone'
+
+  # ── Log retention < 180 days (Direction 4) ────────────────
+  - id: "log-retention-less-than-180-days"
+    name: "Log Retention Below 180 Days"
+    type: pattern
+    severity: HIGH
+    enabled: true
+    message: "Log retention configured for less than 180 days at {file}:{line}. CERT-In requires 180-day minimum log retention."
+    fix_hint: "Set log retention to at least 180 days. CERT-In mandates rolling 180-day retention for all ICT system logs."
+    references:
+      - "CERT-In Direction 4: Log retention"
+    tags:
+      - cert-in
+      - logging
+      - retention
+    languages:
+      - python
+      - javascript
+      - yaml
+      - "*"
+    patterns:
+      - '(?i)(?:retention|rotate|keep|max_age|ttl|expire)\s*[:=]\s*(?:[1-9]|[1-9]\d|1[0-7]\d)\s*(?:d|day)'
+      - '(?i)(?:retention_days|log_retention|keep_days)\s*[:=]\s*(?:[1-9]|[1-9]\d|1[0-7]\d)\b'
+    exclude_patterns:
+      - 'test'
+      - 'example'
+      - 'mock'
+
+  # ── Disabled audit logging ────────────────────────────────
+  - id: "audit-logging-disabled"
+    name: "Audit Logging Disabled"
+    type: pattern
+    severity: CRITICAL
+    enabled: true
+    message: "Audit or access logging appears to be disabled at {file}:{line}. CERT-In requires maintaining logs of all ICT system actions."
+    fix_hint: "Enable audit logging. Never disable logging in production. CERT-In mandates comprehensive system logs."
+    references:
+      - "CERT-In Direction 4"
+    tags:
+      - cert-in
+      - audit
+      - logging
+    languages:
+      - python
+      - javascript
+      - typescript
+      - "*"
+    patterns:
+      - '(?i)(?:audit|access)_?log(?:ging|s)?\s*[:=]\s*(?:false|off|disabled|none|0)'
+      - '(?i)logging\.disable\('
+      - '(?i)logger\.disabled\s*=\s*True'
+    exclude_patterns:
+      - 'test'
+      - 'mock'
+
+  # ── VPN without logging ───────────────────────────────────
+  - id: "vpn-without-logging"
+    name: "VPN Configuration Without Logging"
+    type: pattern
+    severity: HIGH
+    enabled: true
+    message: "VPN configuration at {file}:{line} without log directives. CERT-In requires VPN providers to maintain logs for 5 years."
+    fix_hint: "Enable comprehensive logging for VPN connections including subscriber info, allocated IPs, and timestamps."
+    references:
+      - "CERT-In Direction 5: VPN log retention"
+    tags:
+      - cert-in
+      - vpn
+      - logging
+    languages:
+      - yaml
+      - conf
+      - "*"
+    patterns:
+      - '(?i)(?:openvpn|wireguard|ipsec).*(?:log\s*[:=]\s*(?:false|off|none|/dev/null))'
+    exclude_patterns:
+      - 'test'
+
+  # ═══════════════════════════════════════════════════════════
+  #  LLM RULES
+  # ═══════════════════════════════════════════════════════════
+
+  # ── Incident reporting mechanism (Direction 2) ────────────
+  - id: "no-incident-reporting"
+    name: "No Security Incident Reporting Mechanism"
+    type: llm
+    severity: HIGH
+    enabled: true
+    message: "Security incident handling code has no mechanism to report to CERT-In. CERT-In requires reporting within 6 hours."
+    fix_hint: "Implement incident reporting to CERT-In (incident@cert-in.org.in) within 6 hours. Include nature, impact, affected systems."
+    references:
+      - "CERT-In Direction 2: Mandatory incident reporting"
+    tags:
+      - cert-in
+      - incident
+      - reporting
+    languages:
+      - python
+      - javascript
+      - typescript
+      - java
+    prompt: >
+      Check if security incident handling or error reporting code includes
+      a mechanism to report incidents to authorities (CERT-In). Look for:
+      1. Security exception handlers that log internally but don't trigger external notification
+      2. Intrusion detection handlers without escalation/reporting
+      3. Data breach handlers without authority notification pipeline
+      A violation occurs when security incidents are handled but there is
+      NO mechanism to report to external authorities within the mandated timeframe.
+
+  # ── Missing access controls (Direction 4) ─────────────────
+  - id: "no-access-control-logging"
+    name: "No Access Control on Sensitive Operations"
+    type: llm
+    severity: HIGH
+    enabled: true
+    message: "Sensitive operation performed without access control checks or logging. CERT-In requires access controls and audit trails."
+    fix_hint: "Add role-based access control (RBAC) and log all access to sensitive operations with user identity and timestamp."
+    references:
+      - "CERT-In Direction 4: Access controls and logging"
+    tags:
+      - cert-in
+      - access-control
+      - audit
+    languages:
+      - python
+      - javascript
+      - typescript
+      - java
+    prompt: >
+      Check if sensitive operations (admin functions, data deletion, configuration
+      changes, user management) are performed WITHOUT access control checks
+      or audit logging. Look for:
+      1. Admin/management endpoints with no authentication or authorization checks
+      2. Database modification operations without recording who performed them
+      3. Configuration change functions without role verification
+      4. Delete/purge operations without access control or audit trail
+      A violation occurs when a sensitive operation runs without BOTH
+      access control verification AND audit logging.
+
+  # ── No encryption at rest ─────────────────────────────────
+  - id: "no-encryption-at-rest"
+    name: "No Encryption at Rest for Logs/Data"
+    type: llm
+    severity: MEDIUM
+    enabled: true
+    message: "Sensitive data or logs stored without encryption at rest. CERT-In requires secure storage of all ICT system logs."
+    fix_hint: "Enable encryption at rest for databases, log storage, and backup systems."
+    references:
+      - "CERT-In Direction 4"
+    tags:
+      - cert-in
+      - encryption
+    languages:
+      - python
+      - javascript
+      - typescript
+      - yaml
+    prompt: >
+      Check if log files, database connections, or data storage configurations
+      are set up WITHOUT encryption at rest. Look for:
+      1. File-based logging without encryption (plaintext log files)
+      2. Database connection strings without SSL/TLS parameters
+      3. Backup configurations without encryption
+      4. S3/cloud storage configs without server-side encryption enabled
+      A violation occurs when sensitive data or logs are stored and there
+      is NO evidence of encryption at rest being configured.
+
+  # ── Hardcoded credentials in infra config ─────────────────
+  - id: "infra-hardcoded-credentials"
+    name: "Hardcoded Credentials in Infrastructure Config"
+    type: llm
+    severity: CRITICAL
+    enabled: true
+    message: "Infrastructure configuration contains hardcoded credentials. CERT-In requires proper credential management."
+    fix_hint: "Use a secrets manager (Vault, AWS Secrets Manager) or environment variables. Never hardcode credentials in config files."
+    references:
+      - "CERT-In Direction 4: Security safeguards"
+    tags:
+      - cert-in
+      - credentials
+      - infrastructure
+    languages:
+      - python
+      - javascript
+      - typescript
+      - yaml
+      - json
+      - toml
+      - conf
+      - "*"
+    prompt: >
+      Check if infrastructure configuration files contain hardcoded
+      passwords, API keys, database credentials, or SSH keys. Look for:
+      1. Database connection strings with inline passwords
+      2. API keys or tokens assigned as string literals
+      3. SSH private keys or certificates embedded in code
+      4. Cloud provider credentials (AWS, GCP, Azure) hardcoded
+      A violation occurs when credentials are written directly in the
+      source code rather than being loaded from environment variables
+      or a secrets management system.
+
+  # ── No security event monitoring ──────────────────────────
+  - id: "no-security-monitoring"
+    name: "No Security Event Monitoring"
+    type: llm
+    severity: MEDIUM
+    enabled: true
+    message: "Application handles authentication/authorization but has no security event monitoring. CERT-In requires continuous monitoring."
+    fix_hint: "Implement security event monitoring: log and alert on failed logins, privilege escalations, and unusual access patterns."
+    references:
+      - "CERT-In Direction 4"
+    tags:
+      - cert-in
+      - monitoring
+      - security
+    languages:
+      - python
+      - javascript
+      - typescript
+      - java
+    prompt: >
+      Check if authentication and authorization code includes security
+      event monitoring. Look for:
+      1. Login functions that don't log failed attempts
+      2. Authorization checks that don't record access denials
+      3. Password reset/change flows without security event logging
+      4. Admin actions without monitoring or alerting
+      A violation occurs when auth-related code handles security events
+      (login, logout, access denied, password change) but does NOT log
+      these events for monitoring purposes.
+
+  # ── Cross-border data transfer without controls ───────────
+  - id: "uncontrolled-cross-border-transfer"
+    name: "Uncontrolled Cross-Border Data Transfer"
+    type: llm
+    severity: HIGH
+    enabled: true
+    message: "Data sent to external/international service without transfer controls. Compliance requires awareness of cross-border data flows."
+    fix_hint: "Document and control cross-border data transfers. Ensure adequate data protection agreements with foreign processors."
+    references:
+      - "CERT-In Directions"
+      - "DPDP Act 2023, Section 16"
+    tags:
+      - cert-in
+      - data-transfer
+      - cross-border
+    languages:
+      - python
+      - javascript
+      - typescript
+      - java
+    prompt: >
+      Check if personal data or sensitive information is being sent to
+      external APIs or services (especially international ones) without
+      any transfer controls or documentation. Look for:
+      1. HTTP requests sending personal data to external domains
+      2. Third-party SDK calls transmitting user data without data processing agreements
+      3. Cloud storage uploads to regions outside India without controls
+      A violation occurs when personal data is transmitted externally
+      with NO evidence of transfer controls, documentation, or agreements.

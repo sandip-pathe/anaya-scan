@@ -1,0 +1,84 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: anaya-postgres
+    environment:
+      POSTGRES_USER: anaya
+      POSTGRES_PASSWORD: anaya
+      POSTGRES_DB: anaya
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U anaya -d anaya"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - anaya-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: anaya-redis
+    ports:
+      - "6380:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - anaya-net
+
+  anaya-api:
+    build: .
+    container_name: anaya-api
+    command: uvicorn anaya.api.app:create_app --factory --host 0.0.0.0 --port 8000 --reload
+    ports:
+      - "${APP_PORT:-8001}:8000"
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://anaya:anaya@postgres:5432/anaya
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - ./anaya:/app/anaya
+      - ./cli:/app/cli
+      - ./private-key.pem:/app/private-key.pem:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - anaya-net
+
+  anaya-worker:
+    build: .
+    container_name: anaya-worker
+    command: celery -A anaya.worker.celery_app worker --loglevel=info --concurrency=2
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://anaya:anaya@postgres:5432/anaya
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - ./anaya:/app/anaya
+      - ./cli:/app/cli
+      - ./private-key.pem:/app/private-key.pem:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - anaya-net
+
+volumes:
+  pgdata:
+  redisdata:
+
+networks:
+  anaya-net:
+    driver: bridge

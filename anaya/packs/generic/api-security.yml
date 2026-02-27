@@ -1,0 +1,409 @@
+manifest:
+  id: "generic/api-security"
+  version: "1.0.0"
+  name: "API Security"
+  description: >
+    API security best practices covering authentication, authorization,
+    rate limiting, input validation, CORS, CSRF, error handling, and
+    IDOR prevention. Combines OWASP API Security Top 10 with practical
+    enforcement rules.
+  last_updated: "2026-02-24"
+  sources:
+    - "https://owasp.org/API-Security/"
+    - "https://owasp.org/www-project-web-security-testing-guide/"
+    - "https://cheatsheetseries.owasp.org/cheatsheets/REST_Security_Cheat_Sheet.html"
+  changelog:
+    - version: "1.0.0"
+      date: "2026-02-24"
+      notes: "Initial release: 14 rules covering API security fundamentals"
+
+rules:
+  # ═══════════════════════════════════════════════════════════
+  #  PATTERN RULES — deterministic checks
+  # ═══════════════════════════════════════════════════════════
+
+  # ── CORS wildcard ─────────────────────────────────────────
+  - id: "cors-wildcard-origin"
+    name: "CORS Wildcard Origin"
+    type: pattern
+    severity: HIGH
+    enabled: true
+    message: "CORS allows all origins (*) at {file}:{line}. This permits any website to make authenticated requests."
+    fix_hint: "Restrict CORS origins to specific trusted domains. Never use wildcard (*) in production."
+    references:
+      - "https://owasp.org/API-Security/editions/2023/en/0xa7-server-side-request-forgery/"
+      - "https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS"
+    tags:
+      - api
+      - cors
+      - owasp
+    languages:
+      - python
+      - javascript
+      - typescript
+      - java
+    patterns:
+      - '(?i)(?:access.control.allow.origin|allow_origins)\s*[:=]\s*["\x27*\[\s]*\*'
+      - '(?i)cors\(\s*\*\s*\)'
+      - '(?i)allow_origins\s*=\s*\[\s*"\*"\s*\]'
+    exclude_patterns:
+      - 'test'
+      - 'development'
+      - 'localhost'
+
+  # ── SQL injection ─────────────────────────────────────────
+  - id: "sql-injection"
+    name: "SQL Injection Vulnerability"
+    type: pattern
+    severity: CRITICAL
+    enabled: true
+    message: "Potential SQL injection at {file}:{line}. User input may be directly concatenated into SQL query."
+    fix_hint: "Use parameterised queries or an ORM. Never concatenate user input into SQL strings."
+    references:
+      - "https://owasp.org/Top10/A03_2021-Injection/"
+      - "https://cwe.mitre.org/data/definitions/89.html"
+    tags:
+      - api
+      - injection
+      - owasp
+      - cwe-89
+    languages:
+      - python
+      - javascript
+      - typescript
+    patterns:
+      - '(?i)(?:execute|query|raw)\s*\(\s*f["\x27].*(?:SELECT|INSERT|UPDATE|DELETE|DROP)'
+      - '(?i)(?:execute|query|raw)\s*\(\s*["\x27].*(?:SELECT|INSERT|UPDATE|DELETE|DROP).*["\x27]\s*%\s*'
+      - '(?i)(?:execute|query|raw)\s*\(\s*["\x27].*(?:SELECT|INSERT|UPDATE|DELETE|DROP).*["\x27]\s*\.\s*format\s*\('
+      - '(?i)(?:execute|query|raw)\s*\(\s*["\x27].*(?:SELECT|INSERT|UPDATE|DELETE|DROP).*\+\s*(?:req|request|params|query|body|input|user)'
+    exclude_patterns:
+      - 'sqlalchemy'
+      - 'parameterize'
+      - 'placeholder'
+      - 'prepared'
+
+  # ── Eval / code execution ─────────────────────────────────
+  - id: "dangerous-code-execution"
+    name: "Dangerous Code Execution"
+    type: pattern
+    severity: CRITICAL
+    enabled: true
+    message: "Dangerous code execution function used at {file}:{line}. User input may reach eval/exec."
+    fix_hint: "Never use eval(), exec(), or Function() with user-controlled input. Use safe alternatives."
+    references:
+      - "https://owasp.org/Top10/A03_2021-Injection/"
+      - "https://cwe.mitre.org/data/definitions/94.html"
+    tags:
+      - api
+      - injection
+      - cwe-94
+    languages:
+      - python
+      - javascript
+      - typescript
+    patterns:
+      - '(?i)\beval\s*\('
+      - '(?i)\bexec\s*\('
+      - '(?i)new\s+Function\s*\('
+      - '(?i)\bsystem\s*\('
+      - '(?i)subprocess\.call\s*\(.*shell\s*=\s*True'
+    exclude_patterns:
+      - 'ast\.literal_eval'
+      - 'json\.loads'
+      - 'safe_eval'
+      - 'test'
+      - 'mock'
+
+  # ── Disabled SSL verification ─────────────────────────────
+  - id: "disabled-ssl-verification"
+    name: "Disabled SSL/TLS Verification"
+    type: pattern
+    severity: HIGH
+    enabled: true
+    message: "SSL/TLS certificate verification disabled at {file}:{line}. This enables man-in-the-middle attacks."
+    fix_hint: "Never disable SSL verification in production. Use proper CA certificates."
+    references:
+      - "https://owasp.org/Top10/A07_2021-Identification_and_Authentication_Failures/"
+      - "https://cwe.mitre.org/data/definitions/295.html"
+    tags:
+      - api
+      - tls
+      - cwe-295
+    languages:
+      - python
+      - javascript
+      - typescript
+    patterns:
+      - '(?i)verify\s*[:=]\s*False'
+      - '(?i)rejectUnauthorized\s*[:=]\s*false'
+      - '(?i)CERT_NONE'
+      - '(?i)InsecureRequestWarning'
+      - '(?i)check_hostname\s*=\s*False'
+    exclude_patterns:
+      - 'test'
+      - 'mock'
+      - 'localhost'
+
+  # ── Missing CSRF protection ──────────────────────────────
+  - id: "missing-csrf-protection"
+    name: "Missing CSRF Protection"
+    type: pattern
+    severity: HIGH
+    enabled: true
+    message: "Form POST handler at {file}:{line} without CSRF token validation."
+    fix_hint: "Add CSRF token validation to all state-changing endpoints. Use framework-provided CSRF middleware."
+    references:
+      - "https://owasp.org/Top10/A05_2021-Security_Misconfiguration/"
+      - "https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html"
+    tags:
+      - api
+      - csrf
+      - owasp
+    languages:
+      - python
+      - javascript
+      - typescript
+    patterns:
+      - '(?i)csrf\s*[:=]\s*(?:false|off|disabled|none)'
+      - '(?i)disable.*csrf'
+      - '(?i)@csrf_exempt'
+    exclude_patterns:
+      - 'api'
+      - 'webhook'
+      - 'test'
+
+  # ── Missing request size limit ────────────────────────────
+  - id: "no-request-size-limit"
+    name: "No Request Body Size Limit"
+    type: pattern
+    severity: MEDIUM
+    enabled: true
+    message: "No request body size limit configured at {file}:{line}. This can lead to denial of service."
+    fix_hint: "Set a maximum request body size (e.g., 1MB for APIs, 10MB for file uploads)."
+    references:
+      - "https://cheatsheetseries.owasp.org/cheatsheets/Denial_of_Service_Cheat_Sheet.html"
+    tags:
+      - api
+      - dos
+    languages:
+      - python
+      - javascript
+      - typescript
+    patterns:
+      - '(?i)(?:max_content_length|body_limit|limit)\s*[:=]\s*(?:None|null|0|Infinity|undefined)'
+    exclude_patterns:
+      - 'test'
+
+  # ═══════════════════════════════════════════════════════════
+  #  LLM RULES — contextual analysis
+  # ═══════════════════════════════════════════════════════════
+
+  # ── No authentication middleware ──────────────────────────
+  - id: "no-auth-on-endpoint"
+    name: "No Authentication on API Endpoint"
+    type: llm
+    severity: CRITICAL
+    enabled: true
+    message: "API endpoint handles sensitive data or operations without authentication middleware."
+    fix_hint: "Add authentication middleware (JWT, OAuth, API key) to all endpoints handling sensitive data or operations."
+    references:
+      - "https://owasp.org/API-Security/editions/2023/en/0xa2-broken-authentication/"
+    tags:
+      - api
+      - auth
+      - owasp
+    languages:
+      - python
+      - javascript
+      - typescript
+      - java
+    prompt: >
+      Check if API route handlers that perform sensitive operations
+      (data access, mutations, admin functions) have authentication
+      middleware or decorators. Look for:
+      1. Route handlers with no auth decorator/middleware (e.g. @login_required, Depends(get_current_user))
+      2. Endpoints accessing user data without verifying identity
+      3. State-changing endpoints (POST/PUT/DELETE) without authentication
+      Exclude: health checks, public pages, login/register endpoints, webhook receivers.
+      A violation occurs when a sensitive endpoint has NO authentication check.
+
+  # ── No rate limiting ──────────────────────────────────────
+  - id: "no-rate-limiting"
+    name: "No Rate Limiting on Sensitive Endpoint"
+    type: llm
+    severity: HIGH
+    enabled: true
+    message: "Sensitive API endpoint has no rate limiting, enabling brute force and abuse."
+    fix_hint: "Add rate limiting middleware. Use token bucket or sliding window algorithms. Limit login attempts to 5/minute."
+    references:
+      - "https://owasp.org/API-Security/editions/2023/en/0xa4-unrestricted-resource-consumption/"
+    tags:
+      - api
+      - rate-limit
+      - owasp
+    languages:
+      - python
+      - javascript
+      - typescript
+      - java
+    prompt: >
+      Check if sensitive API endpoints (login, password reset, OTP,
+      payment, search) have rate limiting configured. Look for:
+      1. Login/auth endpoints without rate limiting decorator or middleware
+      2. Password reset or OTP endpoints without request throttling
+      3. Payment or transaction endpoints without rate controls
+      4. Search or data export endpoints without query limits
+      Exclude: internal/health endpoints and webhook receivers.
+      A violation occurs when a sensitive endpoint has NO rate limiting.
+
+  # ── No input validation ───────────────────────────────────
+  - id: "no-input-validation"
+    name: "No Input Validation on Request Data"
+    type: llm
+    severity: HIGH
+    enabled: true
+    message: "Request parameters used directly without validation or sanitisation."
+    fix_hint: "Validate and sanitise all input. Use schema validation (Pydantic, Joi, Zod) for request bodies."
+    references:
+      - "https://owasp.org/API-Security/editions/2023/en/0xa3-broken-object-property-level-authorization/"
+      - "https://cwe.mitre.org/data/definitions/20.html"
+    tags:
+      - api
+      - validation
+      - owasp
+    languages:
+      - python
+      - javascript
+      - typescript
+      - java
+    prompt: >
+      Check if API endpoint handlers use request parameters (query params,
+      body fields, path params) directly without validation. Look for:
+      1. request.body or request.json() values used directly in database queries
+      2. Query parameters used without type checking or sanitisation
+      3. Path parameters used in file system operations without validation
+      4. User-supplied data passed to sensitive functions without schema validation
+      Exclude: endpoints using Pydantic models, Joi schemas, or typed framework params.
+      A violation occurs when user input reaches sensitive operations WITHOUT validation.
+
+  # ── IDOR vulnerability ────────────────────────────────────
+  - id: "idor-vulnerability"
+    name: "IDOR — Insecure Direct Object Reference"
+    type: llm
+    severity: CRITICAL
+    enabled: true
+    message: "Object accessed using user-supplied ID without ownership verification. This enables unauthorised data access."
+    fix_hint: "Always verify that the authenticated user owns or has access to the requested resource. Add ownership checks."
+    references:
+      - "https://owasp.org/API-Security/editions/2023/en/0xa1-broken-object-level-authorization/"
+      - "https://cwe.mitre.org/data/definitions/639.html"
+    tags:
+      - api
+      - idor
+      - owasp
+      - cwe-639
+    languages:
+      - python
+      - javascript
+      - typescript
+      - java
+    prompt: >
+      Check if API endpoints use user-supplied IDs (from URL path, query
+      params, or body) to fetch data WITHOUT verifying that the
+      authenticated user has permission to access it. Look for:
+      1. Fetching records by ID from URL path without checking user ownership
+      2. Querying database with user-supplied IDs without adding a user filter
+      3. Returning another user's data when given their ID
+      A violation occurs when the code fetches a resource by ID and does
+      NOT verify ownership or access permissions of the requesting user.
+
+  # ── Verbose error responses ───────────────────────────────
+  - id: "verbose-error-response"
+    name: "Verbose Error Response Leaking Details"
+    type: llm
+    severity: MEDIUM
+    enabled: true
+    message: "Error handler returns detailed internal information (stack traces, SQL errors, file paths) to the client."
+    fix_hint: "Return generic error messages to clients. Log detailed errors server-side only. Never expose stack traces."
+    references:
+      - "https://owasp.org/API-Security/editions/2023/en/0xa9-improper-inventory-management/"
+      - "https://cwe.mitre.org/data/definitions/209.html"
+    tags:
+      - api
+      - error-handling
+      - cwe-209
+    languages:
+      - python
+      - javascript
+      - typescript
+      - java
+    prompt: >
+      Check if error or exception handlers return detailed internal
+      information to API clients. Look for:
+      1. Exception handlers that return str(exception) or traceback to the response
+      2. Error responses containing SQL error details, file paths, or stack traces
+      3. Debug mode or verbose error pages enabled in production config
+      4. Exception details serialised directly into API response bodies
+      A violation occurs when internal error details (stack traces,
+      SQL errors, file paths) are returned in an API response.
+
+  # ── Excessive data exposure ───────────────────────────────
+  - id: "excessive-data-exposure"
+    name: "Excessive Data Exposure in API Response"
+    type: llm
+    severity: HIGH
+    enabled: true
+    message: "API response may expose more data than the client needs, including sensitive fields."
+    fix_hint: "Use response schemas/serialisers that explicitly whitelist returned fields. Never return full database objects."
+    references:
+      - "https://owasp.org/API-Security/editions/2023/en/0xa3-broken-object-property-level-authorization/"
+    tags:
+      - api
+      - data-exposure
+      - owasp
+    languages:
+      - python
+      - javascript
+      - typescript
+      - java
+    prompt: >
+      Check if API responses return entire database objects or models
+      without filtering sensitive fields. Look for:
+      1. ORM objects returned directly as JSON (e.g. user.to_dict(), model.dict())
+      2. SELECT * queries with results returned directly to the client
+      3. Response including password hashes, internal IDs, tokens, or PII
+      4. No response schema/serialiser filtering what fields are returned
+      A violation occurs when an API response returns a database object
+      or result set WITHOUT explicitly selecting or filtering fields.
+
+  # ── Mass assignment vulnerability ─────────────────────────
+  - id: "mass-assignment"
+    name: "Mass Assignment Vulnerability"
+    type: llm
+    severity: HIGH
+    enabled: true
+    message: "Request body directly used to update a database object without field whitelist. Enables privilege escalation."
+    fix_hint: "Whitelist allowed fields explicitly. Never pass raw request bodies to ORM update methods."
+    references:
+      - "https://owasp.org/API-Security/editions/2023/en/0xa3-broken-object-property-level-authorization/"
+      - "https://cwe.mitre.org/data/definitions/915.html"
+    tags:
+      - api
+      - mass-assignment
+      - owasp
+      - cwe-915
+    languages:
+      - python
+      - javascript
+      - typescript
+      - java
+    prompt: >
+      Check if API handlers pass request body data directly to database
+      update/create operations without restricting which fields can be set.
+      Look for:
+      1. request.json() or request.body passed directly to model constructor
+      2. ORM .update(**request.data) without field whitelist
+      3. Object.assign(user, req.body) or spread operator {...req.body}
+      4. No distinction between user-settable and system-only fields
+      A violation occurs when request body data can set any field on a
+      database object including protected ones (role, is_admin, balance).

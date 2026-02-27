@@ -1,0 +1,17 @@
+version: "1"
+
+# Ignore test fixtures and scripts — they contain intentional violations
+ignore:
+  paths:
+    - "tests/**"
+    - "scripts/**"
+    - "*.json"
+    - "__pycache__/**"
+
+# Severity thresholds
+thresholds:
+  fail_on: CRITICAL
+  warn_on: HIGH
+
+# LLM scanner — enable when OPENAI_API_KEY is set
+enable_llm: false

@@ -1,0 +1,206 @@
+manifest:
+  id: "generic/tls-encryption"
+  version: "1.0.0"
+  name: "TLS & Encryption"
+  description: "Detects insecure TLS configurations, disabled certificate verification, and weak encryption"
+  last_updated: "2026-02-21"
+  sources:
+    - "https://cheatsheetseries.owasp.org/cheatsheets/Transport_Layer_Security_Cheat_Sheet.html"
+    - "https://cwe.mitre.org/data/definitions/295.html"
+  changelog:
+    - version: "1.0.0"
+      date: "2026-02-21"
+      notes: "Initial release with 7 rules covering TLS, certificate verification, and encryption"
+
+rules:
+  # ── 1. verify=False ─────────────────────────────────────
+  - id: "no-verify-false"
+    name: "No Disabled SSL Verification"
+    type: pattern
+    severity: CRITICAL
+    enabled: true
+    message: "SSL/TLS certificate verification disabled at {file}:{line}"
+    fix_hint: "Remove verify=False. Use proper CA bundle or system certificates."
+    references:
+      - "https://cwe.mitre.org/data/definitions/295.html"
+    tags:
+      - tls
+      - ssl
+      - cwe-295
+    languages:
+      - python
+    patterns:
+      - 'verify\s*=\s*False'
+    exclude_patterns:
+      - '#\s*(?:nosec|noqa)'
+      - 'test_'
+      - 'mock'
+
+  # ── 2. CERT_NONE ───────────────────────────────────────
+  - id: "no-cert-none"
+    name: "No CERT_NONE Usage"
+    type: pattern
+    severity: CRITICAL
+    enabled: true
+    message: "ssl.CERT_NONE disables certificate validation at {file}:{line}"
+    fix_hint: "Use ssl.CERT_REQUIRED with proper CA certificates"
+    references:
+      - "https://cwe.mitre.org/data/definitions/295.html"
+    tags:
+      - tls
+      - ssl
+      - cwe-295
+    languages:
+      - python
+    patterns:
+      - 'CERT_NONE'
+    exclude_patterns:
+      - '#\s*(?:nosec|noqa)'
+      - 'test_'
+
+  # ── 3. Deprecated TLS Versions ──────────────────────────
+  - id: "no-deprecated-tls"
+    name: "No Deprecated TLS Versions"
+    type: pattern
+    severity: HIGH
+    enabled: true
+    message: "Deprecated TLS/SSL version used at {file}:{line}"
+    fix_hint: "Use TLS 1.2 or TLS 1.3 only. SSLv2, SSLv3, TLS 1.0, and TLS 1.1 are deprecated."
+    references:
+      - "https://datatracker.ietf.org/doc/rfc8996/"
+    tags:
+      - tls
+      - deprecated
+    languages:
+      - python
+      - javascript
+    patterns:
+      - '(?i)(?:SSLv2|SSLv3|TLSv1_0|TLSv1_1|TLS_1_0|TLS_1_1|PROTOCOL_SSLv2|PROTOCOL_SSLv3|PROTOCOL_TLS)'
+      - '(?i)(?:ssl\.PROTOCOL_TLSv1\b|ssl\.PROTOCOL_TLSv1_1|secureProtocol.*TLSv1_method|secureProtocol.*SSLv3_method)'
+    exclude_patterns:
+      - 'test_'
+      - 'mock'
+      - 'PROTOCOL_TLS_CLIENT'
+
+  # ── 4. Weak Ciphers ───────────────────────────────────
+  - id: "no-weak-ciphers"
+    name: "No Weak Cipher Suites"
+    type: pattern
+    severity: HIGH
+    enabled: true
+    message: "Weak cipher suite configured at {file}:{line}"
+    fix_hint: "Use strong cipher suites only (AES-256-GCM, CHACHA20). Remove RC4, DES, 3DES, MD5 ciphers."
+    references:
+      - "https://cheatsheetseries.owasp.org/cheatsheets/Transport_Layer_Security_Cheat_Sheet.html"
+    tags:
+      - tls
+      - cipher
+    languages:
+      - python
+      - javascript
+    patterns:
+      - '(?i)\b(?:RC4|DES-CBC|3DES|DES-CBC3|RC2|anon)\b'
+      - '(?i)\bhashlib\.md5\b'
+      - '(?i)\bMD5(?:_|-|\s*\()'
+    exclude_patterns:
+      - 'test_'
+      - 'mock'
+      - 'comment'
+      - '#'
+      - '//'
+      - 'nullable'
+      - 'description'
+      - 'NullPool'
+      - 'null='
+      - 'choices='
+
+  # ── 5. Hardcoded HTTP URLs ─────────────────────────────
+  - id: "no-hardcoded-http-url"
+    name: "No Hardcoded HTTP URLs"
+    type: pattern
+    severity: MEDIUM
+    enabled: true
+    message: "Hardcoded HTTP (non-HTTPS) URL found at {file}:{line}"
+    fix_hint: "Use HTTPS URLs instead of HTTP. If HTTP is intentional (localhost), add a noqa comment."
+    references:
+      - "https://cwe.mitre.org/data/definitions/319.html"
+    tags:
+      - tls
+      - http
+      - cwe-319
+    languages:
+      - python
+      - javascript
+    patterns:
+      - 'http://(?!localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]|example\.com)'
+    exclude_patterns:
+      - 'test_'
+      - 'mock'
+      - '#\s*noqa'
+      - '//\s*noqa'
+      - 'xmlns'
+      - 'schema'
+      - 'snomed'
+      - 'loinc'
+      - 'hl7.org'
+      - 'unitsofmeasure'
+      - 'readthedocs'
+      - 'cookiecutter'
+      - 'system":\s*"http'
+      - 'system='
+      - 'ohc.network'
+      - 'terminology'
+      - '^\s*#'
+      - '^\s*//'
+      - '^\s*\*'
+      - 'wikipedia'
+      - 'github\.io'
+      - 'niwinz'
+      - 'whitenoise'
+
+  # ── 6. Node.js rejectUnauthorized: false ────────────────
+  - id: "no-reject-unauthorized-false"
+    name: "No rejectUnauthorized False"
+    type: pattern
+    severity: CRITICAL
+    enabled: true
+    message: "TLS certificate rejection disabled at {file}:{line}"
+    fix_hint: "Remove rejectUnauthorized: false. Use proper CA certificates."
+    references:
+      - "https://cwe.mitre.org/data/definitions/295.html"
+    tags:
+      - tls
+      - nodejs
+      - cwe-295
+    languages:
+      - javascript
+    patterns:
+      - 'rejectUnauthorized\s*:\s*false'
+    exclude_patterns:
+      - 'test'
+      - 'mock'
+      - '//\s*noqa'
+
+  # ── 7. Insecure Random for Crypto ──────────────────────
+  - id: "no-insecure-random-crypto"
+    name: "No Math.random for Cryptographic Use"
+    type: pattern
+    severity: HIGH
+    enabled: true
+    message: "Math.random() used where cryptographic randomness needed at {file}:{line}"
+    fix_hint: "Use crypto.randomBytes() or crypto.getRandomValues() for security-sensitive operations"
+    references:
+      - "https://cwe.mitre.org/data/definitions/338.html"
+    tags:
+      - tls
+      - crypto
+      - cwe-338
+    languages:
+      - javascript
+    patterns:
+      - '(?i)Math\.random\s*\(\s*\).*(?:token|key|secret|password|nonce|iv|salt|hash)'
+      - '(?i)(?:token|key|secret|password|nonce|iv|salt|hash).*Math\.random\s*\(\s*\)'
+    exclude_patterns:
+      - 'test'
+      - 'mock'
+      - 'example'

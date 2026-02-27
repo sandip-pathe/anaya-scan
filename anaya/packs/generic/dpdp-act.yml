@@ -1,0 +1,441 @@
+manifest:
+  id: "generic/dpdp-act"
+  version: "1.0.0"
+  name: "DPDP Act 2023 & Rules 2025"
+  description: >
+    Digital Personal Data Protection Act, 2023 (India) and DPDP Rules 2025.
+    Checks for consent management, data encryption, audit logging,
+    data erasure, breach notification, and child data protections.
+    Mandatory compliance deadline: May 2027.
+  last_updated: "2026-02-24"
+  sources:
+    - "https://www.meity.gov.in/static/uploads/2024/06/2bf1f0e9f04e6fb4f8fef35e82c42aa5.pdf"
+    - "https://www.dpdpact2023.com"
+    - "https://secureprivacy.ai/blog/india-dpdp-act-phase-1"
+  changelog:
+    - version: "1.0.0"
+      date: "2026-02-24"
+      notes: "Initial release: 14 rules covering DPDP Act sections 3,6,7,8,10,14"
+
+rules:
+  # ═══════════════════════════════════════════════════════════
+  #  PATTERN RULES — deterministic, zero-cost
+  # ═══════════════════════════════════════════════════════════
+
+  # ── Rule 6(1)(a): Encryption of personal data ─────────────
+  - id: "aadhaar-in-plaintext"
+    name: "Aadhaar Number in Plaintext"
+    type: pattern
+    severity: CRITICAL
+    enabled: true
+    message: "Aadhaar number pattern detected in plaintext at {file}:{line}. DPDP Rule 6(1)(a) requires encryption/masking of personal data."
+    fix_hint: "Never store or log Aadhaar numbers in plaintext. Use encryption, masking, or virtual tokens."
+    references:
+      - "https://www.dpdpact2023.com"
+      - "DPDP Rules 2025, Rule 6(1)(a)"
+    tags:
+      - dpdp
+      - pii
+      - aadhaar
+    languages:
+      - python
+      - javascript
+      - typescript
+      - java
+      - go
+      - "*"
+    patterns:
+      - '(?<!\+)\b[2-9]\d{3}[\s-]?\d{4}[\s-]?\d{4}\b'
+    exclude_patterns:
+      - 'encrypt'
+      - 'mask'
+      - 'hash'
+      - 'xxxx'
+      - 'test'
+      - 'example'
+      - 'mock'
+      - 'dummy'
+      - 'phone'
+      - 'mobile'
+      - 'tel'
+      - 'contact'
+
+  - id: "pan-number-in-plaintext"
+    name: "PAN Number in Plaintext"
+    type: pattern
+    severity: HIGH
+    enabled: true
+    message: "PAN card number pattern detected at {file}:{line}. DPDP Rule 6(1)(a) requires personal data to be encrypted or masked."
+    fix_hint: "Encrypt or mask PAN numbers. Never store or log them in plaintext."
+    references:
+      - "DPDP Rules 2025, Rule 6(1)(a)"
+    tags:
+      - dpdp
+      - pii
+      - pan
+    languages:
+      - python
+      - javascript
+      - typescript
+      - java
+      - "*"
+    patterns:
+      - '\b[A-Z]{5}[0-9]{4}[A-Z]\b'
+    exclude_patterns:
+      - 'encrypt'
+      - 'mask'
+      - 'hash'
+      - 'test'
+      - 'example'
+      - 'mock'
+      - 'regex'
+      - 'pattern'
+      - 'validate'
+
+  - id: "pii-in-logs"
+    name: "Personal Data Logged in Plaintext"
+    type: pattern
+    severity: HIGH
+    enabled: true
+    message: "Personal data (email/phone/aadhaar) may be logged in plaintext at {file}:{line}. DPDP Rule 6(1)(a) requires protection of personal data."
+    fix_hint: "Mask or redact personal data before logging. Use structured logging with PII filters."
+    references:
+      - "DPDP Rules 2025, Rule 6(1)(a)"
+      - "DPDP Rules 2025, Rule 6(1)(c)"
+    tags:
+      - dpdp
+      - pii
+      - logging
+    languages:
+      - python
+      - javascript
+      - typescript
+    patterns:
+      - '(?i)(?:log(?:ger)?|print|console)\.\w+\(.*(?:aadhaar|aadhar|email|phone|mobile|pan_number|pan_card).*\)'
+    exclude_patterns:
+      - 'mask'
+      - 'redact'
+      - 'sanitize'
+      - 'filter'
+      - 'obfuscate'
+
+  - id: "plaintext-password-storage"
+    name: "Plaintext Password Storage"
+    type: pattern
+    severity: CRITICAL
+    enabled: true
+    message: "Password appears to be stored or compared in plaintext at {file}:{line}. DPDP Rule 6(1)(a) requires encryption."
+    fix_hint: "Hash passwords using bcrypt, scrypt, or argon2. Never store or compare passwords in plaintext."
+    references:
+      - "DPDP Rules 2025, Rule 6(1)(a)"
+    tags:
+      - dpdp
+      - security
+      - password
+    languages:
+      - python
+      - javascript
+      - typescript
+    patterns:
+      - '(?i)password\s*==\s*["\x27]'
+      - '(?i)password\s*=\s*["\x27][^"\x27]{4,}["\x27]'
+    exclude_patterns:
+      - 'hash'
+      - 'bcrypt'
+      - 'scrypt'
+      - 'argon'
+      - 'os\.getenv'
+      - 'environ'
+      - 'process\.env'
+      - 'config\.'
+      - 'settings\.'
+      - 'test'
+      - 'mock'
+      - 'example'
+
+  # ── Rule 6(1)(b): Access control ──────────────────────────
+  - id: "http-no-tls"
+    name: "HTTP Without TLS for Personal Data"
+    type: pattern
+    severity: HIGH
+    enabled: true
+    message: "Non-HTTPS URL detected at {file}:{line}. DPDP Rule 6(1)(a) requires securing personal data, including in transit."
+    fix_hint: "Use HTTPS for all endpoints handling personal data. Enable TLS/SSL."
+    references:
+      - "DPDP Rules 2025, Rule 6(1)(a)"
+    tags:
+      - dpdp
+      - tls
+      - transport
+    languages:
+      - python
+      - javascript
+      - typescript
+      - "*"
+    patterns:
+      - 'http://(?!localhost|127\.0\.0\.1|0\.0\.0\.0|example\.com)'
+    exclude_patterns:
+      - 'test'
+      - 'mock'
+      - 'example'
+      - 'schema'
+      - 'redirect'
+      - 'snomed'
+      - 'loinc'
+      - 'hl7.org'
+      - 'unitsofmeasure'
+      - 'readthedocs'
+      - 'cookiecutter'
+      - 'system":\s*"http'
+      - 'system='
+      - 'ohc.network'
+      - 'terminology'
+
+  # ═══════════════════════════════════════════════════════════
+  #  LLM RULES — contextual, intent-aware analysis
+  # ═══════════════════════════════════════════════════════════
+
+  # ── Rule 3: Notice and consent before processing ──────────
+  - id: "no-consent-before-processing"
+    name: "No Consent Before Data Processing"
+    type: llm
+    severity: CRITICAL
+    enabled: true
+    message: "Function processes personal data without obtaining or verifying user consent. DPDP Act Section 6 requires consent before processing."
+    fix_hint: "Add a consent check before processing personal data. Verify the user has given informed consent for the specific purpose."
+    references:
+      - "DPDP Act 2023, Section 6"
+      - "DPDP Rules 2025, Rule 3"
+    tags:
+      - dpdp
+      - consent
+    languages:
+      - python
+      - javascript
+      - typescript
+      - java
+    prompt: >
+      Check if this code collects or processes personal data (names, emails,
+      phone numbers, Aadhaar, PAN, addresses, biometrics, financial data)
+      WITHOUT first checking for user consent. Look for functions that:
+      1. Accept or store personal data fields but have no consent verification
+      2. Process user data without checking a consent flag/status
+      3. Send personal data to external APIs without consent validation
+      A violation occurs when personal data is processed and there is NO
+      evidence of consent being checked anywhere in the function.
+    examples:
+      - |
+        def register_user(name, email, phone):
+            db.users.insert({"name": name, "email": email, "phone": phone})
+            # No consent check before storing personal data
+
+  # ── Rule 6(1)(a): Encryption of personal data ─────────────
+  - id: "personal-data-without-encryption"
+    name: "Personal Data Stored Without Encryption"
+    type: llm
+    severity: HIGH
+    enabled: true
+    message: "Personal data appears to be stored or transmitted without encryption. DPDP Rule 6(1)(a) requires encryption, obfuscation, masking or virtual tokens."
+    fix_hint: "Encrypt personal data at rest using AES-256 or equivalent. Use virtual tokens or masking for display."
+    references:
+      - "DPDP Rules 2025, Rule 6(1)(a)"
+    tags:
+      - dpdp
+      - encryption
+    languages:
+      - python
+      - javascript
+      - typescript
+      - java
+    prompt: >
+      Check if personal data (names, emails, phone numbers, Aadhaar, PAN,
+      financial data, health data) is being stored in a database or file
+      WITHOUT encryption or masking. Look for:
+      1. Database inserts/updates with plaintext personal data fields
+      2. File writes containing personal data without encryption
+      3. Personal data fields in model/schema definitions with no encryption annotation
+      A violation occurs when personal data is persisted and there is NO
+      evidence of encryption, hashing, masking, or tokenization.
+
+  # ── Rule 6(1)(c): Audit logging ───────────────────────────
+  - id: "no-audit-log-on-data-access"
+    name: "No Audit Log on Personal Data Access"
+    type: llm
+    severity: HIGH
+    enabled: true
+    message: "Personal data is accessed or modified without audit logging. DPDP Rule 6(1)(c) requires logging for detection of unauthorised access."
+    fix_hint: "Add audit logging (who, what, when, from where) for all personal data access and modifications."
+    references:
+      - "DPDP Rules 2025, Rule 6(1)(c)"
+      - "DPDP Rules 2025, Rule 6(1)(e)"
+    tags:
+      - dpdp
+      - audit
+      - logging
+    languages:
+      - python
+      - javascript
+      - typescript
+      - java
+    prompt: >
+      Check if functions that access, modify, or delete personal data
+      include audit logging. DPDP Rule 6(1)(c) requires "appropriate logs,
+      monitoring and review, for enabling detection of unauthorised access."
+      Look for:
+      1. Database queries that retrieve personal data without logging the access
+      2. Update/delete operations on personal data without logging who did it
+      3. API endpoints serving personal data without access logging
+      A violation occurs when personal data is accessed/modified and there
+      is NO log statement recording the access or modification.
+
+  # ── Rule 7: Breach notification ───────────────────────────
+  - id: "no-breach-notification-mechanism"
+    name: "No Data Breach Notification Mechanism"
+    type: llm
+    severity: HIGH
+    enabled: true
+    message: "Code handles a data breach event but has no notification mechanism. DPDP Rule 7 requires notifying affected users and the Board."
+    fix_hint: "Implement breach notification: notify affected users (nature, extent, timing) and the Data Protection Board within 72 hours."
+    references:
+      - "DPDP Rules 2025, Rule 7(1)"
+      - "DPDP Rules 2025, Rule 7(2)"
+    tags:
+      - dpdp
+      - breach
+      - notification
+    languages:
+      - python
+      - javascript
+      - typescript
+      - java
+    prompt: >
+      Check if this code handles error/exception scenarios involving
+      personal data (database errors, unauthorized access, data leaks)
+      WITHOUT any breach notification mechanism. Look for:
+      1. Exception handlers for data access errors that don't trigger notifications
+      2. Security event handlers without user notification logic
+      3. Error handling that silently swallows data exposure incidents
+      A violation occurs when a potential data breach scenario is handled
+      but there is NO mechanism to notify affected users or authorities.
+
+  # ── Rule 8: Data erasure / retention ──────────────────────
+  - id: "no-data-deletion-path"
+    name: "No Data Deletion/Erasure Path"
+    type: llm
+    severity: HIGH
+    enabled: true
+    message: "Personal data model/table has no deletion or erasure mechanism. DPDP Rule 8 requires erasure when the specified purpose is served."
+    fix_hint: "Implement data erasure: add delete/purge methods, retention policies, and 48-hour pre-deletion user notification."
+    references:
+      - "DPDP Rules 2025, Rule 8(1)"
+      - "DPDP Rules 2025, Rule 8(2)"
+    tags:
+      - dpdp
+      - erasure
+      - retention
+    languages:
+      - python
+      - javascript
+      - typescript
+      - java
+    prompt: >
+      Check if code defining data models or database schemas for personal
+      data includes a mechanism for data erasure or deletion. DPDP Rule 8
+      requires erasure when the purpose is served. Look for:
+      1. User/profile models with no delete/purge/anonymize method
+      2. Database tables storing personal data with no retention policy or TTL
+      3. CRUD operations that have Create/Read/Update but no Delete for personal data
+      A violation occurs when personal data is stored but there is NO
+      evidence of a deletion, erasure, or anonymization mechanism.
+
+  # ── Rule 10: Child data protection ────────────────────────
+  - id: "no-age-verification"
+    name: "No Age Verification for Minors"
+    type: llm
+    severity: CRITICAL
+    enabled: true
+    message: "User registration/signup has no age verification or parental consent check. DPDP Rule 10 requires verifiable parental consent for children."
+    fix_hint: "Add age verification: if user is under 18, require verifiable parental consent before processing their data."
+    references:
+      - "DPDP Rules 2025, Rule 10(1)"
+    tags:
+      - dpdp
+      - child
+      - consent
+    languages:
+      - python
+      - javascript
+      - typescript
+      - java
+    prompt: >
+      Check if user registration, signup, or onboarding code verifies the
+      user's age and obtains parental consent for minors. DPDP Rule 10
+      requires verifiable consent of the parent before processing a child's
+      data. Look for:
+      1. Registration flows that accept date_of_birth but don't check if user is under 18
+      2. Account creation with no age gate or parental consent mechanism
+      3. Processing children's data without parental verification
+      A violation occurs when user onboarding handles age/DOB data but
+      does NOT check if the user is a minor or obtain parental consent.
+
+  # ── Rule 14: Data principal rights ────────────────────────
+  - id: "no-data-portability"
+    name: "No Data Export/Portability"
+    type: llm
+    severity: MEDIUM
+    enabled: true
+    message: "No mechanism for users to export their personal data. DPDP Act Section 11 grants Data Principals the right to access their data."
+    fix_hint: "Implement a data export/download endpoint that lets users retrieve all their personal data in a machine-readable format."
+    references:
+      - "DPDP Act 2023, Section 11"
+      - "DPDP Rules 2025, Rule 14(1)"
+    tags:
+      - dpdp
+      - rights
+      - portability
+    languages:
+      - python
+      - javascript
+      - typescript
+      - java
+    prompt: >
+      Check if this code includes mechanisms for users (Data Principals)
+      to access, export, or download their personal data. Look for:
+      1. User-facing API endpoints that handle personal data but offer no export
+      2. User profile/account code with no data download capability
+      3. Systems storing extensive personal data with no self-service access mechanism
+      A violation occurs when a system stores significant personal data
+      but provides NO way for users to export or download it.
+
+  # ── Rule 6(1)(e): Log retention ───────────────────────────
+  - id: "insufficient-log-retention"
+    name: "Insufficient Log Retention Period"
+    type: llm
+    severity: MEDIUM
+    enabled: true
+    message: "Log retention may be configured for less than 1 year. DPDP Rule 6(1)(e) requires retaining logs for at least one year."
+    fix_hint: "Configure log retention to at least 365 days. DPDP Rule 6(1)(e) requires 1-year minimum for personal data access logs."
+    references:
+      - "DPDP Rules 2025, Rule 6(1)(e)"
+      - "DPDP Rules 2025, Rule 8(3)"
+    tags:
+      - dpdp
+      - logging
+      - retention
+    languages:
+      - python
+      - javascript
+      - typescript
+      - java
+      - yaml
+      - "*"
+    prompt: >
+      Check if log retention or data retention is configured for less than
+      one year (365 days). DPDP Rule 6(1)(e) requires retaining logs and
+      personal data for at least one year. Look for:
+      1. Log rotation config with retention < 365 days
+      2. Database cleanup jobs that delete logs older than < 1 year
+      3. TTL/expiry settings on audit tables set to less than 365 days
+      4. Retention policy variables set below 365 days
+      A violation occurs when log or data retention is explicitly configured
+      to be less than one year.

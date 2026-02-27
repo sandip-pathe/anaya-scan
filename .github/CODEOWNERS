@@ -1,0 +1,29 @@
+# CODEOWNERS file for AnaYa
+
+# Global code owners
+* @maintainer
+
+# Engine
+/anaya/engine/ @maintainer
+
+# GitHub integration
+/anaya/github/ @maintainer
+
+# Compliance module
+/anaya/engine/compliance/ @maintainer
+
+# Rule packs
+/anaya/packs/ @maintainer
+
+# Tests
+/tests/ @maintainer
+
+# Documentation
+/docs/ @maintainer
+*.md @maintainer
+
+# CI/CD
+/.github/ @maintainer
+
+# Configuration
+/pyproject.toml @maintainer
