@@ -12,7 +12,7 @@ permissions:
 jobs:
   build-and-publish:
     runs-on: ubuntu-latest
-    environment: release  # Required for PyPI trusted publisher
+    # environment: release  # Uncomment after setting up trusted publisher at pypi.org/manage/account/publishing
 
     steps:
       - uses: actions/checkout@v4
@@ -34,9 +34,10 @@ jobs:
         run: twine check dist/*
 
       - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
-        # Uses trusted publisher (OIDC) — no API token needed!
-        # Configure at: https://pypi.org/manage/account/publishing/
+        run: |
+          twine upload dist/* -u __token__ -p ${{ secrets.PYPI_API_TOKEN }}
+        env:
+          TWINE_REPOSITORY_URL: https://upload.pypi.org/legacy/
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -55,14 +56,14 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build Docker image
-        run: |
-          docker build -t anayascan/anaya:${{ github.ref_name }} .
-          docker tag anayascan/anaya:${{ github.ref_name }} anayascan/anaya:latest
-
-      - name: Publish Docker image
-        if: ${{ secrets.DOCKERHUB_TOKEN != '' }}
-        run: |
-          echo ${{ secrets.DOCKERHUB_TOKEN }} | docker login -u ${{ secrets.DOCKERHUB_USERNAME }} --password-stdin
-          docker push anayascan/anaya:${{ github.ref_name }}
-          docker push anayascan/anaya:latest
+      # Docker push is optional — add DOCKERHUB_USERNAME, DOCKERHUB_TOKEN secrets to enable
+      # - name: Build Docker image
+      #   run: |
+      #     docker build -t anayascan/anaya:${{ github.ref_name }} .
+      #     docker tag anayascan/anaya:${{ github.ref_name }} anayascan/anaya:latest
+      #
+      # - name: Publish Docker image
+      #   run: |
+      #     echo ${{ secrets.DOCKERHUB_TOKEN }} | docker login -u ${{ secrets.DOCKERHUB_USERNAME }} --password-stdin
+      #     docker push anayascan/anaya:${{ github.ref_name }}
+      #     docker push anayascan/anaya:latest
