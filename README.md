@@ -1,7 +1,7 @@
 # 🔍 AnaYa
 
 [![PyPI version](https://badge.fury.io/py/anaya.svg)](https://badge.fury.io/py/anaya)
-[![GitHub Workflow Status](https://github.com/anaya-scan/anaya/actions/workflows/ci.yml/badge.svg)](https://github.com/anaya-scan/anaya/actions)
+[![GitHub Workflow Status](https://github.com/sandip-pathe/anaya-scan/actions/workflows/ci.yml/badge.svg)](https://github.com/sandip-pathe/anaya-scan/actions)
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL%203.0-blue.svg)](LICENSE)
 [![Python 3.12+](https://img.shields.io/badge/Python-3.12%2B-blue)](https://www.python.org/downloads/)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker)](https://hub.docker.com/r/anayascan/anaya)
@@ -10,7 +10,7 @@
 
 Detects hardcoded secrets, OWASP Top 10 vulnerabilities, PII exposure, missing audit logs, and more via GitHub Check Runs, SARIF, and PR comments.
 
-**Open-core under AGPL-3.0** · Built by the community, for the community · [Join us on GitHub Discussions](https://github.com/anaya-scan/anaya/discussions)
+**Open-core under AGPL-3.0** · Built by the community, for the community · [Join us on GitHub Discussions](https://github.com/sandip-pathe/anaya-scan/discussions)
 
 ## ⚡ Quick Start
 
@@ -253,4 +253,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) to get started.
 
 ---
 
-Built with ❤️ by the AnaYa community. [Star us on GitHub!](https://github.com/anaya-scan/anaya)
+Built with ❤️ by the AnaYa community. [Star us on GitHub!](https://github.com/sandip-pathe/anaya-scan)

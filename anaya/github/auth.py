@@ -49,16 +49,46 @@ def generate_jwt(
     Returns:
         Encoded JWT string.
     """
+    resolved_app_id = app_id or settings.github_app_id
+    if not resolved_app_id or resolved_app_id == "__not_set__":
+        raise ValueError(
+            "GITHUB_APP_ID is not configured. "
+            "Set the GITHUB_APP_ID environment variable."
+        )
+
+    resolved_key = private_key or settings.github_private_key
+    if not resolved_key or resolved_key == "__not_set__":
+        # Try loading from file path
+        private_key_path = getattr(settings, "github_private_key_path", None)
+        if private_key_path and private_key_path != "__not_set__":
+            try:
+                from pathlib import Path
+                resolved_key = Path(private_key_path).read_text(encoding="utf-8")
+            except FileNotFoundError:
+                raise ValueError(
+                    f"GitHub App private key file not found: {private_key_path}. "
+                    "Check GITHUB_PRIVATE_KEY_PATH in your environment."
+                ) from None
+            except PermissionError:
+                raise ValueError(
+                    f"Cannot read GitHub App private key file: {private_key_path}. "
+                    "Check file permissions."
+                ) from None
+        else:
+            raise ValueError(
+                "GITHUB_PRIVATE_KEY is not configured. "
+                "Set GITHUB_PRIVATE_KEY or GITHUB_PRIVATE_KEY_PATH in your environment."
+            )
+
     now = int(time.time())
     payload = {
         "iat": now - 60,  # 60 seconds in the past for clock drift
         "exp": now + _JWT_EXPIRY_SECONDS,
-        "iss": app_id or settings.github_app_id,
+        "iss": resolved_app_id,
     }
 
-    key = private_key or settings.github_private_key
-    token: str = jwt.encode(payload, key, algorithm="RS256")
-    logger.debug("Generated JWT for App ID %s", payload["iss"])
+    token: str = jwt.encode(payload, resolved_key, algorithm="RS256")
+    logger.debug("Generated JWT for App ID %s", resolved_app_id)
     return token
 
 

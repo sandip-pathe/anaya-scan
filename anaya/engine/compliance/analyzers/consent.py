@@ -288,12 +288,29 @@ class ConsentAnalyzer(BaseAnalyzer):
         import httpx
         from openai import OpenAI
         from anaya.config import settings
+        from anaya.engine.llm_guard import (
+            LLMCallBlocked,
+            guard_llm_call,
+            record_llm_failure,
+            record_llm_success,
+        )
 
         if not settings.openai_api_key:
             logger.warning("No OpenAI API key — skipping LLM judgment for §4")
             return {
                 "status": "UNKNOWN",
                 "reasoning": "LLM judgment skipped — no API key configured.",
+                "consent_type": None,
+                "remediation": [],
+            }
+
+        try:
+            guard_llm_call()
+        except LLMCallBlocked as exc:
+            logger.warning("LLM blocked for §4 consent judgment: %s", exc)
+            return {
+                "status": "UNKNOWN",
+                "reasoning": f"LLM call blocked: {exc}",
                 "consent_type": None,
                 "remediation": [],
             }
@@ -346,16 +363,23 @@ class ConsentAnalyzer(BaseAnalyzer):
 
         logger.info("Calling LLM (%s) for §4 consent judgment…", settings.openai_model)
 
-        response = client.chat.completions.create(
-            model=settings.openai_model,
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
-            ],
-            temperature=0.0,
-            max_tokens=1024,
-            response_format={"type": "json_object"},
-        )
+        try:
+            response = client.chat.completions.create(
+                model=settings.openai_model,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user},
+                ],
+                temperature=0.0,
+                max_tokens=1024,
+                response_format={"type": "json_object"},
+            )
+            record_llm_success()
+        except LLMCallBlocked:
+            raise
+        except Exception:
+            record_llm_failure()
+            raise
 
         raw = response.choices[0].message.content or "{}"
         logger.debug("§4 LLM response: %s", raw)

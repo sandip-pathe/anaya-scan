@@ -5,8 +5,19 @@ description = "Compliance-as-code engine — GitHub App that scans PRs against p
 readme = "README.md"
 license = { text = "AGPL-3.0" }
 requires-python = ">=3.12"
-authors = [{ name = "Anaya Team" }]
-
+authors = [{ name = "Sandip Pathe", email = "sandip@anaya.legal" }]
+keywords = ["compliance", "security", "scanner", "github", "sast", "secrets-detection", "owasp"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: GNU Affero General Public License v3",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Security",
+    "Topic :: Software Development :: Quality Assurance",
+    "Typing :: Typed",
+]
 dependencies = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.32",
@@ -42,9 +53,22 @@ dev = [
 [project.scripts]
 anaya = "cli.main:app"
 
+[project.urls]
+Homepage = "https://anaya.legal"
+Documentation = "https://github.com/sandip-pathe/anaya-scan#readme"
+Repository = "https://github.com/sandip-pathe/anaya-scan"
+Issues = "https://github.com/sandip-pathe/anaya-scan/issues"
+Changelog = "https://github.com/sandip-pathe/anaya-scan/blob/main/CHANGELOG.md"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.sdist]
+include = ["anaya/", "cli/", "LICENSE", "README.md"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["anaya", "cli"]
 
 [tool.ruff]
 target-version = "py312"

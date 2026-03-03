@@ -11,9 +11,22 @@ import asyncio
 import logging
 import uuid
 
+import httpx
+
 from anaya.worker.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
+
+# Transient errors that warrant a retry
+_TRANSIENT_ERRORS = (
+    httpx.ConnectError,
+    httpx.ReadTimeout,
+    httpx.WriteTimeout,
+    httpx.PoolTimeout,
+    ConnectionError,
+    TimeoutError,
+    OSError,
+)
 
 
 def _run_async(coro):
@@ -94,21 +107,25 @@ def scan_pr(
             pr_number,
         )
 
-        # Retry on transient errors
-        try:
-            self.retry(exc=exc)
-        except self.MaxRetriesExceededError:
-            logger.error(
-                "Max retries exceeded for scan: id=%s repo=%s pr=#%d",
-                scan_id,
-                repo,
-                pr_number,
-            )
-            return {
-                "scan_id": scan_id,
-                "status": "error",
-                "error": str(exc),
-            }
+        # Only retry on transient (network/timeout) errors
+        if isinstance(exc, _TRANSIENT_ERRORS):
+            try:
+                self.retry(exc=exc)
+            except self.MaxRetriesExceededError:
+                logger.error(
+                    "Max retries exceeded for scan: id=%s repo=%s pr=#%d",
+                    scan_id,
+                    repo,
+                    pr_number,
+                )
+
+        # Sanitize error message — don't leak secrets or stack traces
+        safe_error = type(exc).__name__
+        return {
+            "scan_id": scan_id,
+            "status": "error",
+            "error": safe_error,
+        }
 
 
 async def _execute_and_record(
@@ -134,7 +151,11 @@ async def _execute_and_record(
     # Record in database
     try:
         from sqlalchemy import text
-        from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+        from sqlalchemy.ext.asyncio import (
+            AsyncSession,
+            async_sessionmaker,
+            create_async_engine,
+        )
 
         from anaya.config import settings
 
@@ -179,7 +200,8 @@ async def _execute_and_record(
         finally:
             await worker_engine.dispose()
     except Exception:
-        logger.exception("Failed to record scan result in database")
+        # Log the full error but don't crash the task — the scan itself succeeded
+        logger.exception("Failed to record scan result in database (scan still succeeded)")
 
     logger.info(
         "Scan complete: id=%s repo=%s pr=#%d violations=%d status=%s duration=%dms",

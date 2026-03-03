@@ -1,0 +1,46 @@
+# Production overlay — use with:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# Adds Caddy for automatic HTTPS, hardens settings, removes dev volume mounts.
+
+services:
+  anaya-api:
+    command: uvicorn anaya.api.app:create_app --factory --host 0.0.0.0 --port 8000 --workers 2
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./private-key.pem:/app/private-key.pem:ro
+    restart: unless-stopped
+
+  anaya-worker:
+    volumes:
+      - ./private-key.pem:/app/private-key.pem:ro
+    restart: unless-stopped
+
+  postgres:
+    ports: []   # Don't expose DB externally in production
+    restart: unless-stopped
+
+  redis:
+    ports: []   # Don't expose Redis externally in production
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: anaya-caddy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - anaya-api
+    restart: unless-stopped
+    networks:
+      - anaya-net
+
+volumes:
+  caddy_data:
+  caddy_config:

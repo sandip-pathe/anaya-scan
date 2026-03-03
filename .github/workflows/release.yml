@@ -5,15 +5,20 @@ on:
     tags:
       - "v*.*.*"
 
+permissions:
+  contents: write        # GitHub Release
+  id-token: write        # PyPI Trusted Publisher (OIDC)
+
 jobs:
   build-and-publish:
     runs-on: ubuntu-latest
+    environment: release  # Required for PyPI trusted publisher
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
@@ -25,17 +30,28 @@ jobs:
       - name: Build distribution
         run: python -m build
 
+      - name: Check distribution
+        run: twine check dist/*
+
       - name: Publish to PyPI
-        run: |
-          twine upload dist/* -u __token__ -p ${{ secrets.PYPI_API_TOKEN }}
+        uses: pypa/gh-action-pypi-publish@release/v1
+        # Uses trusted publisher (OIDC) — no API token needed!
+        # Configure at: https://pypi.org/manage/account/publishing/
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           body: |
-            See CHANGELOG.md for details.
+            ## Install
+
+            ```bash
+            pip install anaya==${{ github.ref_name }}
+            ```
+
+            See [CHANGELOG.md](https://github.com/sandip-pathe/anaya-scan/blob/main/CHANGELOG.md) for details.
           draft: false
           prerelease: false
+          files: dist/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -45,6 +61,7 @@ jobs:
           docker tag anayascan/anaya:${{ github.ref_name }} anayascan/anaya:latest
 
       - name: Publish Docker image
+        if: ${{ secrets.DOCKERHUB_TOKEN != '' }}
         run: |
           echo ${{ secrets.DOCKERHUB_TOKEN }} | docker login -u ${{ secrets.DOCKERHUB_USERNAME }} --password-stdin
           docker push anayascan/anaya:${{ github.ref_name }}

@@ -48,6 +48,7 @@ class PatternScanner(BaseScanner):
         language = self.detect_language(file_path)
         lines = content.splitlines()
         violations: list[Violation] = []
+        _is_test = is_test_file(file_path)
 
         # Filter to only PatternRules
         pattern_rules = [r for r in rules if isinstance(r, PatternRule)]
@@ -55,6 +56,10 @@ class PatternScanner(BaseScanner):
         for rule in pattern_rules:
             # Skip disabled rules
             if not rule.enabled:
+                continue
+
+            # skip_tests: silently drop this rule for test/spec/fixture files
+            if rule.skip_tests and _is_test:
                 continue
 
             # Check language match
@@ -130,11 +135,20 @@ class PatternScanner(BaseScanner):
                     message = message.replace("{line}", str(line_num))
                     message = message.replace("{match}", match.group(0))
 
+                    # Cap severity at MEDIUM for test-file violations so they
+                    # never trigger a build failure on their own (CRITICAL/HIGH
+                    # secrets in test fixtures are common and intentional).
+                    effective_severity = (
+                        Severity.MEDIUM
+                        if _is_test and rule.severity > Severity.MEDIUM
+                        else rule.severity
+                    )
+
                     violations.append(
                         Violation(
                             rule_id=fully_qualified_id,
                             rule_name=rule.name,
-                            severity=rule.severity,
+                            severity=effective_severity,
                             file_path=file_path,
                             line_start=line_num,
                             line_end=line_num,
@@ -145,6 +159,7 @@ class PatternScanner(BaseScanner):
                             fix_hint=rule.fix_hint,
                             references=rule.references,
                             confidence=get_confidence(file_path),
+                            in_test_file=_is_test,
                         )
                     )
                     # One violation per line per rule (don't double-count)

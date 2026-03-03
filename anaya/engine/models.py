@@ -72,6 +72,10 @@ class BaseRule(BaseModel):
     references: list[str] = []
     tags: list[str] = []
     mode: Literal["search", "taint"] = "search"  # reserved for Phase 2 taint engine
+    skip_tests: bool = False
+    # When True, the rule is silently skipped for test/spec/fixture files.
+    # Use for secrets rules that legitimately appear in test fixtures —
+    # this prevents noise without hiding real production violations.
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -247,6 +251,10 @@ class Violation(BaseModel):
     confidence: float = 1.0
     # Always 1.0 for pattern/AST/dep rules. 0.0-1.0 for LLM (Phase 2).
     # Field exists now to avoid breaking model change later.
+    in_test_file: bool = False
+    # True when the violation was found inside a test, spec, fixture, or mock
+    # file. Reporters can display a [TEST] badge; CI can use this to avoid
+    # failing builds on test-only issues.
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -374,8 +382,53 @@ class AnaYaConfig(BaseModel):
 
     @classmethod
     def default(cls) -> AnaYaConfig:
-        """Return a config with all defaults applied."""
-        return cls()
+        """Return a config with all defaults applied.
+
+        The ignore paths below are framework-agnostic and safe to apply to any
+        repository.  They exclude generated/vendored/dependency artefacts that
+        are never worth scanning and would only add noise.
+
+        Test directories are intentionally NOT ignored by default — the engine
+        already handles them by lowering confidence and capping severity, and
+        rules tagged skip_tests=true are silently dropped for those paths.
+        """
+        return cls(
+            ignore=IgnoreConfig(
+                paths=[
+                    # Python artefacts
+                    "**/__pycache__/**",
+                    "**/*.pyc",
+                    "**/migrations/**",
+                    # JS / TS build outputs & deps
+                    "**/node_modules/**",
+                    "**/dist/**",
+                    "**/build/**",
+                    "**/.next/**",
+                    "**/.nuxt/**",
+                    "**/*.min.js",
+                    "**/*.min.css",
+                    "**/*.bundle.js",
+                    # Vendored / generated
+                    "**/vendor/**",
+                    "**/third_party/**",
+                    "**/generated/**",
+                    "**/.gen/**",
+                    # Lock files (binary-like noise)
+                    "**/package-lock.json",
+                    "**/yarn.lock",
+                    "**/go.sum",
+                    "**/Pipfile.lock",
+                    "**/poetry.lock",
+                    # Virtual envs
+                    "**/.venv/**",
+                    "**/venv/**",
+                    "**/.tox/**",
+                    # IDE / OS metadata
+                    "**/.idea/**",
+                    "**/.vscode/**",
+                ]
+            )
+        )
 
 
 # ═══════════════════════════════════════════════════════════════

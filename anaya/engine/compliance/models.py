@@ -19,12 +19,36 @@ from pydantic import BaseModel, Field
 
 
 class Framework(str, Enum):
+    # Python
     DJANGO = "django"
     FASTAPI = "fastapi"
     FLASK = "flask"
-    EXPRESS = "express"          # Node.js
-    SPRING = "spring"            # Java
-    RAILS = "rails"              # Ruby
+    # JavaScript / TypeScript
+    EXPRESS = "express"
+    NESTJS = "nestjs"
+    KOA = "koa"
+    HAPI = "hapi"
+    FASTIFY = "fastify"
+    NEXTJS = "nextjs"
+    # Java
+    SPRING = "spring"
+    # Ruby
+    RAILS = "rails"
+    SINATRA = "sinatra"
+    # Go
+    GIN = "gin"
+    ECHO = "echo"
+    FIBER = "fiber"
+    # PHP
+    LARAVEL = "laravel"
+    SYMFONY = "symfony"
+    # C#
+    ASPNET = "aspnet"
+    # Rust
+    ACTIX = "actix"
+    AXUM = "axum"
+    ROCKET = "rocket"
+    # Generic
     UNKNOWN = "unknown"
 
 

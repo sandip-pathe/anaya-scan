@@ -15,9 +15,9 @@ import logging
 import re
 from typing import TYPE_CHECKING
 
-from anaya.engine.models import ASTRule, Violation
+from anaya.engine.models import ASTRule, Severity, Violation
 from anaya.engine.scanners.base import BaseScanner
-from anaya.engine.utils import get_confidence, is_line_suppressed, CONFIDENCE_AST
+from anaya.engine.utils import get_confidence, is_line_suppressed, is_test_file, CONFIDENCE_AST
 
 if TYPE_CHECKING:
     from tree_sitter import Language, Node, Parser
@@ -99,6 +99,7 @@ class ASTScanner(BaseScanner):
         """
         language = self.detect_language(file_path)
         violations: list[Violation] = []
+        _is_test = is_test_file(file_path)
 
         # Filter to only ASTRules
         ast_rules = [r for r in rules if isinstance(r, ASTRule)]
@@ -106,6 +107,10 @@ class ASTScanner(BaseScanner):
         for rule in ast_rules:
             # Skip disabled rules
             if not rule.enabled:
+                continue
+
+            # skip_tests: silently drop this rule for test/spec/fixture files
+            if rule.skip_tests and _is_test:
                 continue
 
             # Check language match
@@ -186,11 +191,18 @@ class ASTScanner(BaseScanner):
                     .replace("{line}", str(line_start))
                 )
 
+                # Cap severity at MEDIUM for test-file violations.
+                effective_severity = (
+                    Severity.MEDIUM
+                    if _is_test and rule.severity > Severity.MEDIUM
+                    else rule.severity
+                )
+
                 violations.append(
                     Violation(
                         rule_id=fully_qualified_id,
                         rule_name=rule.name,
-                        severity=rule.severity,
+                        severity=effective_severity,
                         file_path=file_path,
                         line_start=line_start,
                         line_end=line_end,
@@ -201,6 +213,7 @@ class ASTScanner(BaseScanner):
                         fix_hint=rule.fix_hint,
                         references=rule.references,
                         confidence=get_confidence(file_path, CONFIDENCE_AST),
+                        in_test_file=_is_test,
                     )
                 )
 

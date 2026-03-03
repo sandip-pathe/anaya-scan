@@ -30,8 +30,10 @@ MAX_ANNOTATIONS_PER_UPDATE = 50
 
 def _violation_to_annotation(violation: Violation) -> dict[str, Any]:
     """Convert a Violation to a GitHub Check Run annotation dict."""
+    # Normalize Windows backslashes to forward slashes for GitHub API
+    normalized_path = violation.file_path.replace("\\", "/")
     annotation: dict[str, Any] = {
-        "path": violation.file_path,
+        "path": normalized_path,
         "start_line": violation.line_start,
         "end_line": violation.line_end,
         "annotation_level": _SEVERITY_TO_LEVEL.get(violation.severity.value, "warning"),
@@ -106,6 +108,10 @@ def build_complete_payload(result: ScanResult) -> dict[str, Any]:
             lines.append(f"| {pack_id} | {count} |")
 
     summary_text = "\n".join(lines)
+
+    # GitHub limits summary text to 65535 characters
+    if len(summary_text) > 65_000:
+        summary_text = summary_text[:65_000] + "\n\n... (truncated)"
 
     # Build annotations (first batch — may need multiple PATCH calls for >50)
     annotations = [

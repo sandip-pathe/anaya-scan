@@ -19,6 +19,13 @@ import logging
 from typing import Any
 
 from anaya.config import settings
+from anaya.engine.llm_guard import (
+    LLMCallBlocked,
+    guard_llm_call,
+    record_llm_failure,
+    record_llm_success,
+    redact_secrets,
+)
 from anaya.engine.models import Violation
 
 logger = logging.getLogger(__name__)
@@ -92,7 +99,7 @@ class LLMViolationEnhancer:
         # Truncate content if too large (keep first 8000 chars)
         truncated = content[:8000] if len(content) > 8000 else content
 
-        # Build violations JSON for the prompt
+        # Build violations JSON for the prompt — redact secrets in snippets
         v_data = [
             {
                 "index": i,
@@ -100,7 +107,7 @@ class LLMViolationEnhancer:
                 "rule_name": v.rule_name,
                 "severity": v.severity.value,
                 "line": v.line_start,
-                "snippet": v.snippet or "",
+                "snippet": redact_secrets(v.snippet or ""),
                 "message": v.message,
             }
             for i, v in enumerate(violations)
@@ -113,6 +120,8 @@ class LLMViolationEnhancer:
         )
 
         try:
+            guard_llm_call()  # circuit breaker + rate limiter
+
             response = self._client.chat.completions.create(
                 model=self._model,
                 messages=[
@@ -123,6 +132,7 @@ class LLMViolationEnhancer:
                 max_tokens=2000,
                 timeout=self._timeout,
             )
+            record_llm_success()
 
             raw = response.choices[0].message.content or "[]"
             # Strip markdown code fences if present
@@ -172,9 +182,12 @@ class LLMViolationEnhancer:
                 "Enhanced %d violations for %s", len(violations), file_path
             )
 
+        except LLMCallBlocked as exc:
+            logger.warning("LLM enhancer blocked for %s: %s", file_path, exc)
         except json.JSONDecodeError:
             logger.warning("LLM enhancer returned invalid JSON for %s", file_path)
         except Exception:
+            record_llm_failure()
             logger.warning("LLM enhancer failed for %s", file_path, exc_info=True)
 
         return violations

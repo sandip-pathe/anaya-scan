@@ -28,12 +28,13 @@ from anaya.engine.compliance.pii_mapper import PersonalDataMap
 
 logger = logging.getLogger(__name__)
 
-# Status display symbols
+# Status display symbols — ASCII-safe for Windows cp1252 terminals.
+# Markdown / GitHub comment output uses emoji via compliance_comment reporter.
 _STATUS_ICON = {
-    "COMPLIANT": "\u2705",       # ✅
-    "PARTIAL": "\u26a0\ufe0f",   # ⚠️
-    "NON_COMPLIANT": "\u274c",   # ❌
-    "UNKNOWN": "\u2753",         # ❓
+    "COMPLIANT": "[PASS]",
+    "PARTIAL": "[WARN]",
+    "NON_COMPLIANT": "[FAIL]",
+    "UNKNOWN": "[????]",
 }
 
 
@@ -169,11 +170,36 @@ class DPDPComplianceRunner:
             "Running %d DPDP section analyzers…", len(self._analyzers)
         )
 
-        # Run all analyzers concurrently
+        # Run all analyzers concurrently — use return_exceptions so one
+        # failing analyzer doesn't crash the entire report.
         tasks = [
             analyzer.analyze(cmap, pii_map) for analyzer in self._analyzers
         ]
-        results: list[SectionResult] = await asyncio.gather(*tasks)
+        raw_results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        # Separate successful results from failures
+        results: list[SectionResult] = []
+        for analyzer, result in zip(self._analyzers, raw_results):
+            if isinstance(result, BaseException):
+                logger.error(
+                    "Analyzer %s failed: %s",
+                    type(analyzer).__name__,
+                    result,
+                )
+                # Create a degraded UNKNOWN result for the failed section
+                results.append(
+                    SectionResult(
+                        section=getattr(analyzer, "section", "??"),
+                        title=getattr(analyzer, "title", type(analyzer).__name__),
+                        status="UNKNOWN",
+                        evidence=[],
+                        blockers=[f"Analyzer error: {result}"],
+                        remediation=["Re-run the compliance scan or check logs."],
+                        llm_calls_made=0,
+                    )
+                )
+            else:
+                results.append(result)
 
         # Sort by section number
         results.sort(key=lambda r: r.section)

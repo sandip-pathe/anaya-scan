@@ -95,9 +95,13 @@ class TestASTScannerPython:
         # credit_account, repay_loan — all without audit_log
         assert len(violations) >= 4, f"Expected >=4 violations, got {len(violations)}"
 
-        # All violations should be HIGH
+        # Violations are in tests/fixtures/ — a test path — so severity is capped
+        # at MEDIUM and in_test_file is set to True.
         for v in violations:
-            assert v.severity == Severity.HIGH
+            assert v.in_test_file, "Expected in_test_file=True for fixture path"
+            assert v.severity == Severity.MEDIUM, (
+                f"Expected MEDIUM (capped from HIGH for test file), got {v.severity}"
+            )
 
         # Check function names are in the expected set
         fn_names_in_violations = set()

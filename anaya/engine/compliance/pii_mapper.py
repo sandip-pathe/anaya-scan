@@ -22,6 +22,8 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import time as _time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
@@ -261,11 +263,22 @@ def _build_user_prompt_for_models(cmap: CodebaseMap, models: list) -> str:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def _call_llm(system_prompt: str, user_prompt: str) -> dict[str, Any]:
+def _call_llm(
+    system_prompt: str,
+    user_prompt: str,
+    *,
+    batch_label: str = "",
+) -> dict[str, Any]:
     """Make a single OpenAI chat completion call and parse JSON response."""
     import httpx
     from openai import OpenAI
     from anaya.config import settings
+    from anaya.engine.llm_guard import (
+        LLMCallBlocked,
+        guard_llm_call,
+        record_llm_failure,
+        record_llm_success,
+    )
 
     if not settings.openai_api_key:
         raise ValueError(
@@ -273,9 +286,11 @@ def _call_llm(system_prompt: str, user_prompt: str) -> dict[str, Any]:
             "Set it in your .env file or environment."
         )
 
+    guard_llm_call()  # circuit breaker + rate limiter
+
     kwargs: dict[str, Any] = {
         "api_key": settings.openai_api_key,
-        "timeout": httpx.Timeout(180.0, connect=10.0),
+        "timeout": httpx.Timeout(300.0, connect=15.0),
         "max_retries": 3,
     }
     if settings.openai_base_url:
@@ -283,22 +298,34 @@ def _call_llm(system_prompt: str, user_prompt: str) -> dict[str, Any]:
 
     client = OpenAI(**kwargs)
     model = settings.openai_model
+    tag = batch_label or "PII"
 
-    logger.info("Calling LLM (%s) for PII classification…", model)
+    logger.info("[%s] Calling LLM (%s), prompt ~%d chars...", tag, model, len(user_prompt))
+    print(f"    >> {tag}: calling {model} (~{len(user_prompt)} chars)...", flush=True)
+    t0 = _time.time()
 
-    response = client.chat.completions.create(
-        model=model,
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ],
-        temperature=0.0,
-        max_tokens=16384,
-        response_format={"type": "json_object"},
-    )
+    try:
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            temperature=0.0,
+            max_tokens=16384,
+            response_format={"type": "json_object"},
+        )
+        record_llm_success()
+    except LLMCallBlocked:
+        raise
+    except Exception:
+        record_llm_failure()
+        raise
 
     raw = response.choices[0].message.content or "{}"
-    logger.debug("LLM raw response length: %d chars", len(raw))
+    elapsed = _time.time() - t0
+    logger.info("[%s] LLM responded in %.1fs (%d chars)", tag, elapsed, len(raw))
+    print(f"    << {tag}: done in {elapsed:.1f}s ({len(raw)} chars)", flush=True)
 
     return json.loads(raw)
 
@@ -318,6 +345,9 @@ class PersonalDataMapper:
     # Maximum models per LLM batch — keeps output JSON within token limits.
     BATCH_SIZE = 25
 
+    # Max parallel LLM calls (keep low to avoid rate limits)
+    MAX_WORKERS = 3
+
     def map(self, cmap: CodebaseMap, *, force: bool = False) -> PersonalDataMap:
         """
         Produce a PersonalDataMap from a CodebaseMap.
@@ -333,16 +363,19 @@ class PersonalDataMapper:
         if not force:
             cached = _load_cache(cmap.root, cmap.git_sha)
             if cached is not None:
+                print("  (cached - no LLM calls needed)", flush=True)
                 return cached
 
         # ── Filter models that actually have fields ───────────────────────
         models_with_fields = [m for m in cmap.models if m.fields]
+        total_fields = sum(len(m.fields) for m in models_with_fields)
 
         logger.info(
             "PII mapping: %d models, ~%d fields",
             len(models_with_fields),
-            sum(len(m.fields) for m in models_with_fields),
+            total_fields,
         )
+        print(f"  - {len(models_with_fields)} models, {total_fields} fields to classify", flush=True)
 
         # ── Build system prompt (shared across batches) ───────────────────
         system = _SYSTEM_PROMPT.format(
@@ -354,6 +387,8 @@ class PersonalDataMapper:
             models_with_fields[i : i + self.BATCH_SIZE]
             for i in range(0, len(models_with_fields), self.BATCH_SIZE)
         ]
+        num_batches = len(batches)
+        print(f"  - {num_batches} batches (batch_size={self.BATCH_SIZE}), parallel={self.MAX_WORKERS}", flush=True)
 
         merged_result: dict[str, Any] = {
             "models": [],
@@ -363,27 +398,42 @@ class PersonalDataMapper:
             "health_fields": [],
         }
 
-        for batch_idx, batch in enumerate(batches, 1):
-            user_prompt = _build_user_prompt_for_models(cmap, batch)
-            logger.info(
-                "Batch %d/%d: %d models, prompt ~%d chars",
-                batch_idx, len(batches), len(batch), len(user_prompt),
-            )
-            result = _call_llm(system, user_prompt)
+        # ── Parallel LLM calls ────────────────────────────────────────────
+        t_llm_start = _time.time()
 
-            # Merge batch result into the combined result
-            merged_result["models"].extend(result.get("models", []))
-            if result.get("children_data_risk"):
-                merged_result["children_data_risk"] = True
-            merged_result["aadhaar_fields"].extend(
-                result.get("aadhaar_fields", [])
+        def _process_batch(batch_idx: int, batch: list) -> tuple[int, dict[str, Any]]:
+            user_prompt = _build_user_prompt_for_models(cmap, batch)
+            label = f"Batch {batch_idx}/{num_batches}"
+            logger.info(
+                "%s: %d models, prompt ~%d chars",
+                label, len(batch), len(user_prompt),
             )
-            merged_result["financial_fields"].extend(
-                result.get("financial_fields", [])
-            )
-            merged_result["health_fields"].extend(
-                result.get("health_fields", [])
-            )
+            result = _call_llm(system, user_prompt, batch_label=label)
+            return batch_idx, result
+
+        with ThreadPoolExecutor(max_workers=self.MAX_WORKERS) as pool:
+            futures = {
+                pool.submit(_process_batch, idx, batch): idx
+                for idx, batch in enumerate(batches, 1)
+            }
+            for future in as_completed(futures):
+                batch_idx, result = future.result()
+                # Merge batch result into the combined result
+                merged_result["models"].extend(result.get("models", []))
+                if result.get("children_data_risk"):
+                    merged_result["children_data_risk"] = True
+                merged_result["aadhaar_fields"].extend(
+                    result.get("aadhaar_fields", [])
+                )
+                merged_result["financial_fields"].extend(
+                    result.get("financial_fields", [])
+                )
+                merged_result["health_fields"].extend(
+                    result.get("health_fields", [])
+                )
+
+        t_llm_elapsed = _time.time() - t_llm_start
+        print(f"  - All {num_batches} batches done in {t_llm_elapsed:.1f}s", flush=True)
 
         # ── Parse merged response ─────────────────────────────────────────
         pmap = self._parse_response(merged_result, cmap)

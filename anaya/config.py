@@ -27,10 +27,12 @@ class Settings(BaseSettings):
     )
 
     # ── GitHub App ───────────────────────────────────────────
-    github_app_id: str
+    # Optional — only required when running as a GitHub App (server mode).
+    # CLI-only usage (anaya scan / anaya compliance) works without these.
+    github_app_id: str | None = None
     github_private_key_path: str = "./private-key.pem"
     github_private_key_content: str | None = None  # Direct PEM content (for Railway / cloud)
-    github_webhook_secret: str
+    github_webhook_secret: str | None = None
 
     # ── Database ─────────────────────────────────────────────
     database_url: str = "postgresql+asyncpg://anaya:anaya@localhost:5432/anaya"
@@ -80,20 +82,23 @@ def _load_settings() -> Settings:
     """
     Load settings with graceful fallback for CLI / test usage.
 
-    In CLI mode and tests, GitHub App env vars may not be set.
-    We provide dummy defaults so the module can be imported without crashing.
-    The actual values are only needed when the API / worker runs.
+    GitHub App env vars are optional — only required when running the server.
     """
-    import os
+    s = Settings()
 
-    defaults: dict[str, str] = {}
-    for key in ("GITHUB_APP_ID", "GITHUB_WEBHOOK_SECRET"):
-        if key not in os.environ:
-            defaults[key.lower()] = "__not_set__"
+    # ── Production safety checks ──────────────────────────────
+    if s.app_env == "production" and s.app_secret_key == "change-me-to-a-random-string":
+        logger.critical(
+            "SECURITY: APP_SECRET_KEY is set to the default value in "
+            "production. Generate a random secret: "
+            "python -c 'import secrets; print(secrets.token_urlsafe(32))'"
+        )
+        raise SystemExit(
+            "Refusing to start in production with the default APP_SECRET_KEY. "
+            "Set a strong random value via the APP_SECRET_KEY environment variable."
+        )
 
-    if defaults:
-        return Settings(**defaults)  # type: ignore[arg-type]
-    return Settings()
+    return s
 
 
 settings = _load_settings()

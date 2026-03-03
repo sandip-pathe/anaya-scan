@@ -19,6 +19,13 @@ import logging
 import re
 from typing import TYPE_CHECKING, Any
 
+from anaya.engine.llm_guard import (
+    LLMCallBlocked,
+    guard_llm_call,
+    record_llm_failure,
+    record_llm_success,
+    redact_secrets,
+)
 from anaya.engine.models import LLMRule, Severity, Violation
 from anaya.engine.scanners.base import BaseScanner
 
@@ -217,6 +224,9 @@ class LLMScanner(BaseScanner):
                 verified, applicable_rules, pack_id, file_path, content,
             )
 
+        except LLMCallBlocked as exc:
+            logger.warning("LLM scanner blocked for %s: %s", file_path, exc)
+            return []
         except Exception:
             logger.exception("LLM scanner error for %s — skipping", file_path)
             return []
@@ -229,6 +239,8 @@ class LLMScanner(BaseScanner):
         file_path: str,
     ) -> list[dict]:
         """Phase 1: Ask the LLM to find potential violations."""
+        guard_llm_call()  # circuit breaker + rate limiter
+
         numbered_source = _build_numbered_source(content)
         rules_desc = _build_rules_description(rules, pack_id)
 
@@ -238,15 +250,24 @@ class LLMScanner(BaseScanner):
             f"## Rules to check:\n\n{rules_desc}"
         )
 
-        response = self._client.chat.completions.create(
-            model=self._model,
-            messages=[
-                {"role": "system", "content": AUDITOR_SYSTEM},
-                {"role": "user", "content": user_message},
-            ],
-            response_format={"type": "json_object"},
-            temperature=0.1,  # Low temperature for consistent analysis
-        )
+        try:
+            response = self._client.chat.completions.create(
+                model=self._model,
+                messages=[
+                    {"role": "system", "content": AUDITOR_SYSTEM},
+                    {"role": "user", "content": user_message},
+                ],
+                response_format={"type": "json_object"},
+                temperature=0.1,  # Low temperature for consistent analysis
+            )
+            record_llm_success()
+        except Exception:
+            record_llm_failure()
+            raise
+
+        if not response.choices:
+            logger.warning("Auditor returned empty choices for %s", file_path)
+            return []
 
         raw = response.choices[0].message.content
         if not raw:
@@ -266,6 +287,8 @@ class LLMScanner(BaseScanner):
         file_path: str,
     ) -> list[dict]:
         """Phase 2: Ask the LLM to verify each candidate violation."""
+        guard_llm_call()  # circuit breaker + rate limiter
+
         numbered_source = _build_numbered_source(content)
 
         candidates_json = json.dumps(candidates, indent=2)
@@ -276,15 +299,24 @@ class LLMScanner(BaseScanner):
             f"```json\n{candidates_json}\n```"
         )
 
-        response = self._client.chat.completions.create(
-            model=self._model,
-            messages=[
-                {"role": "system", "content": CRITIC_SYSTEM},
-                {"role": "user", "content": user_message},
-            ],
-            response_format={"type": "json_object"},
-            temperature=0.0,  # Zero temperature for strict verification
-        )
+        try:
+            response = self._client.chat.completions.create(
+                model=self._model,
+                messages=[
+                    {"role": "system", "content": CRITIC_SYSTEM},
+                    {"role": "user", "content": user_message},
+                ],
+                response_format={"type": "json_object"},
+                temperature=0.0,  # Zero temperature for strict verification
+            )
+            record_llm_success()
+        except Exception:
+            record_llm_failure()
+            raise
+
+        if not response.choices:
+            logger.warning("Critic returned empty choices for %s", file_path)
+            return []
 
         raw = response.choices[0].message.content
         if not raw:
@@ -334,6 +366,8 @@ class LLMScanner(BaseScanner):
             rule_map[f"{pack_id}/{r.id}"] = r
 
         lines = content.splitlines()
+        if not lines:
+            return []
         violations: list[Violation] = []
 
         for finding in verified:
@@ -365,10 +399,11 @@ class LLMScanner(BaseScanner):
                 if is_line_suppressed(source_line, rule_id):
                     continue
 
-            # Get snippet
+            # Get snippet — redact any secrets before storing
             snippet = finding.get("snippet", "")
             if not snippet and line_start <= len(lines):
                 snippet = lines[line_start - 1].strip()[:200]
+            snippet = redact_secrets(snippet)
 
             confidence = finding.get("confidence", 0.7)
             # Adjust confidence for test files / migrations

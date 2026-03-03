@@ -42,7 +42,12 @@ async def github_webhook(request: Request) -> dict:
     """
     # ── 1. Verify signature ──────────────────────────────────
     body = await verify_webhook_signature(request)
-    payload = json.loads(body)
+
+    try:
+        payload = json.loads(body)
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        logger.warning("Invalid JSON in webhook body: %s", exc)
+        raise HTTPException(status_code=400, detail="Invalid JSON payload")
 
     # ── 2. Get event type ────────────────────────────────────
     event_type = request.headers.get("X-GitHub-Event", "unknown")
@@ -103,6 +108,18 @@ async def _handle_pull_request(payload: dict, delivery_id: str) -> dict:
             "status": "skipped",
             "reason": f"action={event.action}, draft={event.pull_request.draft}",
         }
+
+    # Validate installation_id is present
+    if event.installation_id is None:
+        logger.error(
+            "Missing installation_id for PR #%d in %s",
+            event.pr_number,
+            event.repo_full_name,
+        )
+        raise HTTPException(
+            status_code=422,
+            detail="Missing installation.id in webhook payload",
+        )
 
     # Enqueue scan task
     from anaya.worker import tasks as _worker_tasks

@@ -1100,6 +1100,16 @@ class CodebaseIndexer:
         framework = _FrameworkDetector(self.root).detect()
         logger.info("Detected framework: %s", framework.primary.value)
 
+        # ── Auto-dispatch: non-Python frameworks → UniversalIndexer ───────
+        _PYTHON_FRAMEWORKS = {Framework.DJANGO, Framework.FASTAPI, Framework.FLASK}
+        if framework.primary not in _PYTHON_FRAMEWORKS and framework.primary != Framework.UNKNOWN:
+            logger.info(
+                "Non-Python framework detected (%s) — delegating to UniversalIndexer",
+                framework.primary.value,
+            )
+            from anaya.engine.compliance.universal_indexer import UniversalIndexer
+            return UniversalIndexer(self.root).build()
+
         # ── 2. Models ──────────────────────────────────────────────────────
         models: list[ModelDefinition] = []
         delete_paths: list[DeletePath] = []
@@ -1111,10 +1121,15 @@ class CodebaseIndexer:
             m, d = _FastAPIModelExtractor(self.root).extract()
             models, delete_paths = m, d
         else:
-            # Best-effort: try Django extractor first, then FastAPI
+            # Unknown framework: try Python AST extractors first
             m, d = _DjangoModelExtractor(self.root).extract()
             if not m:
                 m, d = _FastAPIModelExtractor(self.root).extract()
+            # If still empty, fall back to universal indexer
+            if not m:
+                logger.info("No Python models found — falling back to UniversalIndexer")
+                from anaya.engine.compliance.universal_indexer import UniversalIndexer
+                return UniversalIndexer(self.root).build()
             models, delete_paths = m, d
 
         logger.info("Found %d model classes, %d FK delete paths", len(models), len(delete_paths))

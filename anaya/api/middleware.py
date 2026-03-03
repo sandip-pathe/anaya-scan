@@ -18,24 +18,48 @@ from anaya.config import settings
 logger = logging.getLogger(__name__)
 
 
+# Maximum webhook payload size (10 MB — GitHub sends at most ~25 MB)
+_MAX_BODY_SIZE = 10 * 1024 * 1024
+
+
 async def verify_webhook_signature(request: Request) -> bytes:
     """
     Verify the GitHub webhook signature (X-Hub-Signature-256).
 
     Reads the raw body once and returns it for downstream use.
     Raises 401 if signature is missing or invalid.
+    Raises 500 if webhook secret is not configured.
+    Raises 413 if body exceeds size limit.
 
     Returns:
         The raw request body bytes (already consumed from the stream).
     """
+    # Guard: reject all webhooks if secret is not properly configured
+    secret = settings.github_webhook_secret
+    if not secret or secret == "__not_set__":
+        logger.error("GITHUB_WEBHOOK_SECRET is not configured — rejecting webhook")
+        raise HTTPException(
+            status_code=500,
+            detail="Webhook secret not configured",
+        )
+
     signature_header = request.headers.get("X-Hub-Signature-256")
     if not signature_header:
         logger.warning("Missing X-Hub-Signature-256 header")
         raise HTTPException(status_code=401, detail="Missing signature")
 
-    body = await request.body()
+    # Enforce body size limit before reading fully into memory
+    content_length = request.headers.get("content-length")
+    if content_length and int(content_length) > _MAX_BODY_SIZE:
+        logger.warning("Webhook payload too large: %s bytes", content_length)
+        raise HTTPException(status_code=413, detail="Payload too large")
 
-    if not _verify_signature(body, signature_header, settings.github_webhook_secret):
+    body = await request.body()
+    if len(body) > _MAX_BODY_SIZE:
+        logger.warning("Webhook payload too large: %d bytes", len(body))
+        raise HTTPException(status_code=413, detail="Payload too large")
+
+    if not _verify_signature(body, signature_header, secret):
         logger.warning("Invalid webhook signature")
         raise HTTPException(status_code=401, detail="Invalid signature")
 
